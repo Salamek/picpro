@@ -1,0 +1,353 @@
+
+
+
+KITSRUS PROGRAMMER FIRMWARE PROTOCOL P014 AS OF 5 MAY 2004
+
+
+
+BAUD SETUP = 19200,N,1
+
+
+ON POWERUP PIC SENDS
+
+
+  'B' (ASCII) + Firmware Type (Byte)
+
+
+  Firmware Type List
+
+
+    K128     = 0
+    K149-A   = 1
+    K149-B   = 2
+    K150     = 3
+
+
+
+WAIT FOR PROGRAMMER COMMAND START
+
+
+  EXPECTING 'P' (ASCII)
+
+
+  NO  - RETURNS 'Q' (ASCII) - Waits for new command start
+
+
+  YES - RETURNS 'P' (ASCII)
+        Monitors from command jump table
+
+
+COMMAND JUMP TABLE (Byte)
+
+
+   0 = Waits for new command start (Stays at jump table. --GEC)
+   1 = RETURNS 'Q' (ASCII) - Waits for new command start (End command - implies voltages off.  --GEC)
+   2 = Wait for next byte received and echo it back
+       Stays at Command Jump Table
+   3 = INITIALISE PROGRAMMING VARIABLES
+       Expects Byte Values
+        1 - ROM size High
+        2 - ROM size Low
+        3 - EEPROM size High
+        4 - EEPROM size Low
+        5 - Core Type
+             0 = NA
+             1 = 18Fx230x330
+             2 = 18Fxx2xx8
+             3 = 16F87 88
+             4 = 12C50x
+             5 = 12C67x 16C50x 16Cxxx
+             6 = 16C8x 16F8x 16F87x 16F62x
+             7 = 16F7x 16F7x7
+             8 = 12F67x
+             9 = 16F87xA
+            10 = 16F818
+        6 - Program Flags
+              Bit 0 = 1, Chip has calibration value ROM word
+              Bit 1 = 1, Chip has Band Gap value in FUSE
+              Bit 2 = 1, Sets single panel access for 18F
+              Bit 3 = 1, Execute very small delay between VCC on, then VPP on
+        7 - Program Delay
+              (0 - 255) X 100uS
+        8 - Power Sequence
+              0 = VCC only
+              1 = VCC then VPP1
+              2 = VCC then VPP2
+              3 = VPP1 then VCC
+              4 = VPP2 then VCC
+        9 - Erase Mode
+              0 = 16C8x 16F8x 16F87x
+              1 = 16F7x
+              2 = 12F67x
+              3 = I6F7x7
+              4 = 18Fxxxx
+              5 = 16F87xA F818 F87
+       10 - Program Tries before programming fail
+       11 - Over Program when programming succeeds
+
+
+       FUNCTION RETURNS 'I' (ASCII)
+       Stays at Command Jump Table
+
+
+   4 = TURN ON PROGRAMMING VOLTAGES
+       FUNCTION RETURNS 'V' (ASCII)
+       Stays at Command Jump Table
+
+
+   5 = TURN OFF PROGRAMMING VOLTAGES
+       FUNCTION RETURNS 'v' (ASCII)
+       Stays at Command Jump Table
+
+
+   6 = CYCLE PROGRAMMING VOLTAGES OFF THEN BACK ON
+       FUNCTION RETURNS 'V' (ASCII)
+       Stays at Command Jump Table
+
+
+   7 = PROGRAM ROM
+       Then expects..
+         ROM word count High
+         ROM word count Low
+         RETURNS 'Y' (ASCII)
+         Then expects 32 bytes of ROM data High Byte - Low Byte
+         Fills Buffer_A
+         RETURNS 'Y' (ASCII)
+         Then expects 32 bytes of ROM data High Byte - Low Byte
+         Fills Buffer_B in background as it is received
+
+       Programming ROM Loop
+         Program ROM with data
+         if no programming error
+           All ROM Programmed?
+             Y - RETURNS 'P' (ASCII)
+                 Stays at Command Jump Table
+             N - Buffer A or B empty?
+                   Y - Send 'Y' for another 32 bytes of data
+                 Continue at Programming ROM Loop
+         else
+           RETURNS 'N' (ASCII)
+                   Current Address High
+                   Current Address Low
+           Stays at Command Jump Table
+
+
+   8 = PROGRAM EEPROM
+       Then expects..
+         EEPROM byte count High
+         EEPROM byte count Low
+         (NOTE: add 2 to EEPROM byte count before sending)
+       RETURNS 'Y' (ASCII)
+       Programming EEPROM Loop
+         Then expects..
+           EEPROM byte x
+           EEPROM byte x + 1
+         All EEPROM Programmed
+           Y - RETURNS 'P' (ASCII)
+               Stays at Command Jump Table
+           N - Programs 2 EEPROM locations
+               RETURNS 'Y' (ASCII)
+               Continue at Programming EEPROM Loop
+
+
+   9 = PROGRAM ID FUSES
+       Then expects...
+         '0' '0' (ASCII)
+         14 bit PIC - ID1 ID2 ID3 ID4 'F' 'F' 'F' 'F' (ASCII)
+                      FUSE Value Low
+                      FUSE Value High
+                      0xFF (Byte)
+                      0xFF (Byte)
+                      0xFF (Byte)
+                      0xFF (Byte)
+                      0xFF (Byte)
+                      0xFF (Byte)
+                      0xFF (Byte)
+                      0xFF (Byte)
+                      0xFF (Byte)
+                      0xFF (Byte)
+            Programs ID and FUSE
+            ERROR    - RETURNS 0xFF (Byte)
+            NO ERROR - RETURNS 0x00 (Byte)
+            Stays at Command Jump Table
+         or
+         16 bit PIC - ID1 ID2 ID3 ID4 1D5 1D6 1D7 1D8 (ASCII)
+                      FUSE1 Value Low
+                      FUSE1 Value High
+                      FUSE2 Value Low
+                      FUSE2 Value High
+                      FUSE3 Value Low
+                      FUSE3 Value High
+                      FUSE4 Value Low
+                      FUSE4 Value High
+                      FUSE5 Value Low
+                      FUSE5 Value High
+                      FUSE6 Value Low
+                      FUSE6 Value High
+                      FUSE7 Value Low
+                      FUSE7 Value High
+            Programs ID
+            RETURNS 'Y' (ASCII)
+            Stays at Command Jump Table
+
+
+  10 = PROGRAM CALIBRATION
+       Then expects...
+         Calibration High (Byte)
+         Calibration Low  (Byte)
+         FUSE High (Byte)
+         FUSE Low  (Byte)
+       CALIBRATION ERROR RETURNS 'C' (ASCII)
+       FUSE ERROR RETURNS 'F' (ASCII)
+       NO ERRORS RETURNS 'Y' (ASCII)
+       Stays at Command Jump Table
+
+
+  11 = READ ROM
+       RETURNS ALL ROM DATA UP UNTIL ADDRESS SPECIFIED
+       WHEN INITIALISING VARIABLES IN HIGH/LOW FORMAT
+       Stays at Command Jump Table
+
+
+       If a byte is received during transfer, it stops and
+       stays at Command Jump Table
+
+
+  12 = READ EEPROM
+
+
+       RETURNS ALL EEPROM DATA UP UNTIL ADDRESS SPECIFIED
+       WHEN INITIALISING VARIABLES
+       Stays at Command Jump Table
+
+
+       If a byte is received during transfer, it stops and
+       stays at Command Jump Table
+
+
+  13 = READ CONFIGURATION
+       RETURNS
+       'C'       (ASCII)
+       ChipID_L  (Byte)
+       ChipID_H  (Byte)
+       ID1       (Byte)
+       ID2       (Byte)
+       ID3       (Byte)
+       ID4       (Byte)
+       ID5       (Byte)
+       ID6       (Byte)
+       ID7       (Byte)
+       ID8       (Byte)
+       Fuse1_L   (Byte)
+       Fuse1_H   (Byte)
+       Fuse2_L   (Byte) can also be CAL word #1
+       Fuse2_H   (Byte)
+       Fuse3_L   (Byte) can also be CAL word #2
+       Fuse3_H   (Byte)
+       Fuse4_L   (Byte)
+       Fuse4_H   (Byte)
+       Fuse5_L   (Byte)
+       Fuse5_H   (Byte)
+       Fuse6_L   (Byte)
+       Fuse6_H   (Byte)
+       Fuse7_L   (Byte)
+       Fuse7_H   (Byte)
+       Calibrate_L   (Byte)
+       Calibrate_H   (Byte)
+       Stays at Command Jump Table
+
+
+       NOTE: Data fields are filled depending on chip type else are 0xFF
+
+
+  14 = READ CALIBRATION
+       RETURNS
+       Calibrate_H   (Byte)
+       Calibrate_L   (Byte)
+       Stays at Command Jump Table
+
+
+  15 = ERASE CHIP
+       RETURNS 'Y' (ASCII)
+
+
+  16 = ERASE CHECK ROM
+       Then expects...
+         High byte of blank ROM
+         Eg 0x3F 14 bit PIC
+            0xFF 16 bit PIC
+
+
+       All ROM checked?
+       NO
+         RETURNS
+         0xFF (Byte) after every 256 words checked
+       YES
+         RETURNS
+         ALL BLANK 'Y' (ASCII)
+         NOT BLANK 'N' (ASCII)
+         Stays at Command Jump Table
+
+
+  17 = ERASE CHECK EEPROM
+       RETURNS
+       ALL BLANK 'Y' (ASCII)
+       NOT BLANK 'N' (ASCII)
+       Stays at Command Jump Table
+
+
+  18 = PROGRAM 18Fxxxx FUSE
+       RETURNS 'Y' (ASCII)
+       Stays at Command Jump Table
+
+
+  19 = CHIP IN SOCKET DETECT
+       RETURNS 'A' (ASCII)
+
+
+       IF CHIP IS DETECTED IN PROGRAMMING SOCKET
+         RETURNS 'Y'
+         Waits for new command start
+
+
+  20 = CHIP OUT OF SOCKET DETECT
+       RETURNS 'A' (ASCII)
+
+
+       IF CHIP IS DETECTED OUT OF PROGRAMMING SOCKET
+         RETURNS 'Y'
+         Waits for new command start
+
+
+  21 = GET VERSION
+       RETURNS
+         K128     = 0  (Byte)
+         K149-A   = 1  (Byte)
+         K149-B   = 2  (Byte)
+         K150     = 3  (Byte)
+
+
+  22 = GET PROTOCOL
+       RETURNS - Protocol number.
+
+
+         Eg 'P013' (ASCII)
+
+
+  23 = PROGRAM DEBUG VECTOR
+       Then expects...
+         High address of DEBUG vector   (Byte)
+         Mid  address of DEBUG vector   (Byte)
+         Low  address of DEBUG vector   (Byte)
+       RETURNS
+         Suceeded  'Y'  (ASCII)
+         Failed    'N'  (ASCII)
+
+
+  24 = READ DEBUG VECTOR
+       RETURNS
+         0xEF                           (Byte)
+         High address of DEBUG vector   (Byte)
+         Mid  address of DEBUG vector   (Byte)
+         Low  address of DEBUG vector   (Byte)
+
