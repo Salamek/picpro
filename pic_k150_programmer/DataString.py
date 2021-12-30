@@ -1,11 +1,13 @@
 import struct
 
+
 def _hex(byte):
     hex_chars = '0123456789abcdef'
     result = hex_chars[byte / 16] + hex_chars[byte % 16]
     return result
 
-class data_string(str):
+
+class DataString(str):
     def __init__(self, src_string):
         self._data = src_string
 
