@@ -9,10 +9,12 @@ Website: https://gitlab.salamek.cz/sadam/pic_k150_programmer.git
 Command details:
     program             Program PIC chip.
     verify              Verify PIC flash.
+    dump                Dump PIC data as binary.
 
 Usage:
     pic-k150-programmer program -p PORT -i HEX_FILE -t PIC_TYPE [--id=PIC_ID] [--fuse=FUSE_NAME:FUSE_VALUE...] [--icsp]
     pic-k150-programmer verify -p PORT -i HEX_FILE -t PIC_TYPE [--icsp]
+    pic-k150-programmer dump <mem_type> -p PORT -b BIN_FILE -t PIC_TYPE [--icsp]
     pic-k150-programmer (-h | --help)
 
 
@@ -23,6 +25,7 @@ Options:
     -p PORT --port=PORT              Set serial port where programmer is connected.
     -t PIC_TYPE --pic_type=PIC_TYPE  Pic type you are programming/reading.
     -i HEX_FILE --hex_file=HEX_FILE  Hex file to flash or to read.
+    -b BIN_FILE --bin_file=BIN_FILE  Hex file to flash or to read.
 """
 
 import os.path
@@ -32,7 +35,9 @@ import signal
 import serial
 from functools import wraps
 from docopt import docopt
+from typing import Union
 from pic_k150_programmer.ChipInfoReader import ChipInfoReader
+from pic_k150_programmer.IChipInfoEntry import IChipInfoEntry
 from pic_k150_programmer.HexFileReader import HexFileReader
 from pic_k150_programmer.ProtocolInterface import ProtocolInterface
 from pic_k150_programmer.exceptions import FuseError, InvalidResponseError
@@ -102,7 +107,6 @@ def program():
 
 @command()
 def verify():
-
     program_pic(
         OPTIONS['--port'],
         OPTIONS['--pic_type'],
@@ -112,9 +116,32 @@ def verify():
     )
 
 
-def program_pic(port: str, pic_type: str, hex_file_name: str, is_program: bool = True, fuses: dict = None, pic_id: str = None, icsp_mode: bool = False):
+@command()
+def dump():
+    chip_info, protocol_interface = programmer_common_bootstrap(
+        OPTIONS['--port'],
+        OPTIONS['--pic_type'],
+        icsp_mode=OPTIONS['--icsp']
+    )
+
+    mem_type = OPTIONS['<mem_type>']
+    output_file = OPTIONS['--bin_file']
+
+    with open(output_file, 'wb') as file:
+
+        if mem_type == 'eeprom':
+            print('Reading EEPROM into file {}...'.format(output_file))
+            file.write(protocol_interface.read_eeprom())
+        elif mem_type == 'rom':
+            print('Reading ROM into file {}...'.format(output_file))
+            file.write(protocol_interface.read_rom())
+        else:
+            raise ValueError('Unknown memory type')
+
+
+def programmer_common_bootstrap(port: str, pic_type: str, icsp_mode: bool) -> Union[None, tuple]:
     """Given a serial port ID, PIC type, hex file name, and other optional
-       data, attempt to program the hex file data to a PIC in the programmer."""
+           data, attempt to program the hex file data to a PIC in the programmer."""
     try:
         s = serial.Serial(port=port, baudrate=19200,
                           bytesize=8, parity='N', stopbits=1,
@@ -122,7 +149,24 @@ def program_pic(port: str, pic_type: str, hex_file_name: str, is_program: bool =
     except serial.SerialException:
         print('Unable to open serial port "{}".'.format(port))
         print('Be sure port identifier is valid and that you have access to it.')
-        return False
+        return None
+
+    try:
+        # Perhaps now, at last, we can program some kind of a PIC.
+        # Start up protocol interface
+        protocol_interface = ProtocolInterface(s)
+
+        # Verify that communications are functioning
+        hex_file_name_encode = b'Hello programmer!'
+        response = protocol_interface.echo(hex_file_name_encode)
+        if response != hex_file_name_encode:
+            print('Invalid response received from PIC programmer. ({} != {})'.format(response, hex_file_name_encode))
+            print('Please check that device is properly connected and working.')
+            return None
+    except InvalidResponseError as e:
+        print('Unable to initialize connection to programmer. {}'.format(e))
+        print('Please check that device is properly connected and working.')
+        return None
 
     # Get chip info
     chip_info_filename = module_location + 'chipdata.cid'
@@ -132,31 +176,38 @@ def program_pic(port: str, pic_type: str, hex_file_name: str, is_program: bool =
         print('Unable to locate chipinfo.cid file.')
         print('Please verify that file is present in the same directory as this script, '
               'and that the filename is in lowercase characters, and that you have access to read the file.')
-        return False
+        return None
 
     try:
         chip_info = chip_info_reader.get_chip(pic_type)
     except KeyError:
         print('Unable to find chip type "{}" in data file.'.format(pic_type))
         print('Please check that the spelling is correct and that data file is up to date.')
-        return False
+        return None
 
+    # Initialize programming variables
+    protocol_interface.init_programming_vars(chip_info, icsp_mode=icsp_mode)
+
+    # Instruct user to insert chip
+    if not icsp_mode:
+        print('Waiting for user to insert chip into socket with pin 1 at {}'.format(chip_info.pin1_location_text()))
+        protocol_interface.wait_until_chip_in_socket()
+        print('Chip detected.')
+    else:
+        print('Accessing chip connected to ICSP port.')
+
+    return chip_info, protocol_interface
+
+
+def prepare_flash_data_from_hex_file(chip_info: IChipInfoEntry, hex_file: HexFileReader, pic_id: str = None, fuses: dict = None) -> tuple:
     # Generate blank ROM and EEPROM of appropriate size.
     rom_blank_word = 0xffff << chip_info.get_core_bits()
     rom_blank_word = (~rom_blank_word & 0xffff)
     rom_blank_bytes = struct.pack('>H', rom_blank_word)
-    rom_blank = rom_blank_bytes * chip_info.vars['rom_size']
+    rom_blank = rom_blank_bytes * chip_info.programming_vars.rom_size
 
     eeprom_blank_byte = b'\xff'
-    eeprom_blank = eeprom_blank_byte * chip_info.vars['eeprom_size']
-
-    # Read hex file.
-    try:
-        hex_file = HexFileReader(hex_file_name)
-    except IOError:
-        print('Unable to find hex file "{}".'.format(hex_file_name))
-        print('Please verify that the file exists and that you have access to it.')
-        return False
+    eeprom_blank = eeprom_blank_byte * chip_info.programming_vars.eeprom_size
 
     rom_word_base = 0x0000
     config_word_base = 0x4000
@@ -235,7 +286,7 @@ def program_pic(port: str, pic_type: str, hex_file_name: str, is_program: bool =
             id_data = bytearray([id_data[x] for x in range(pick_byte, 8, 2)])
 
     # Pull fuse data from config records
-    fuse_data_list = list(map(lambda word: struct.pack('>H', word), chip_info.vars['FUSEblank']))
+    fuse_data_list = list(map(lambda word: struct.pack('>H', word), chip_info.programming_vars.fuse_blank))
     fuse_data = b''.join(fuse_data_list)
     fuse_data = merge_records(
         range_filter_records(
@@ -256,44 +307,37 @@ def program_pic(port: str, pic_type: str, hex_file_name: str, is_program: bool =
     if fuses:
         fuse_settings = chip_info.decode_fuse_data(fuse_values)
         fuse_settings.update(fuses)
-        try:
-            fuse_values = chip_info.encode_fuse_data(fuse_settings)
-        except FuseError:
-            print('Invalid fuse setting.  Fuse names and valid settings for this chip are as follows:')
-            print(chip_info.fuse_doc())
-            return False
+        fuse_values = chip_info.encode_fuse_data(fuse_settings)
 
-    try:
-        # Perhaps now, at last, we can program some kind of a PIC.
-        # Start up protocol interface
-        prot_interface = ProtocolInterface(s)
+    return rom_data, eeprom_data, id_data, fuse_values
 
-        # Verify that communications are functioning
-        hex_file_name_encode = hex_file_name.encode('UTF-8')
-        response = prot_interface.echo(hex_file_name_encode)
-        if response != hex_file_name_encode:
-            print('Invalid response received from PIC programmer. ({} != {})'.format(response, hex_file_name_encode))
-            print('Please check that device is properly connected and working.')
-            return False
-    except InvalidResponseError as e:
-        print('Unable to initialize connection to programmer. {}'.format(e))
-        print('Please check that device is properly connected and working.')
+
+def program_pic(port: str, pic_type: str, hex_file_name: str, is_program: bool = True, fuses: dict = None, pic_id: str = None, icsp_mode: bool = False):
+    """Given a serial port ID, PIC type, hex file name, and other optional
+       data, attempt to program the hex file data to a PIC in the programmer."""
+
+    common_bootstrap_result = programmer_common_bootstrap(port, pic_type, icsp_mode)
+    if not common_bootstrap_result:
         return False
 
-    # Initialize programming variables
-    prot_interface.init_programming_vars(chip_info, icsp_mode=icsp_mode)
+    chip_info, protocol_interface = common_bootstrap_result
 
-    #print('Programmer version is: {}'.format(prot_interface.programmer_firmware_version()))
+    # Read hex file.
+    try:
+        hex_file = HexFileReader(hex_file_name)
+    except IOError:
+        print('Unable to find hex file "{}".'.format(hex_file_name))
+        print('Please verify that the file exists and that you have access to it.')
+        return False
 
     try:
-        # Instruct user to insert chip
-        if not icsp_mode:
-            print('Waiting for user to insert chip into socket with pin 1 at {}'.format(chip_info.pin1_location_text()))
-            prot_interface.wait_until_chip_in_socket()
-            print('Chip detected.')
-        else:
-            print('Accessing chip connected to ICSP port.')
+        rom_data, eeprom_data, id_data, fuse_values = prepare_flash_data_from_hex_file(chip_info, hex_file, pic_id, fuses)
+    except FuseError:
+        print('Invalid fuse setting.  Fuse names and valid settings for this chip are as follows:')
+        print(chip_info.fuse_doc())
+        return False
 
+    try:
         """
         chip_config = prot_interface.read_config()
         print('Chip config: {}'.format(chip_config))
@@ -312,32 +356,32 @@ def program_pic(port: str, pic_type: str, hex_file_name: str, is_program: bool =
             # Write ROM, EEPROM, ID and fuses
 
             print('Erasing Chip')
-            if not prot_interface.erase_chip():
+            if not protocol_interface.erase_chip():
                 print('Erasure failed.')
                 return False
 
-            prot_interface.cycle_programming_voltages()
+            protocol_interface.cycle_programming_voltages()
 
             print('Programming ROM')
-            if not prot_interface.program_rom(rom_data):
+            if not protocol_interface.program_rom(rom_data):
                 print('ROM programming failed.')
                 return False
 
             if chip_info.has_eeprom():
                 print('Programming EEPROM')
-                if not prot_interface.program_eeprom(eeprom_data):
+                if not protocol_interface.program_eeprom(eeprom_data):
                     print('EEPROM programming failed.')
                     return False
 
             print('Programming ID and fuses')
-            if not prot_interface.program_id_fuses(id_data, fuse_values):
+            if not protocol_interface.program_id_fuses(id_data, fuse_values):
                 print('Programming ID and fuses failed.')
                 return False
 
         # Verify programmed data.
         # Behold, my godlike powers of verification:
         print('Verifying ROM')
-        pic_rom_data = prot_interface.read_rom()
+        pic_rom_data = protocol_interface.read_rom()
         verification_result = True
 
         if pic_rom_data == rom_data:
@@ -348,7 +392,7 @@ def program_pic(port: str, pic_type: str, hex_file_name: str, is_program: bool =
 
         if chip_info.has_eeprom():
             print('Verifying EEPROM')
-            pic_eeprom_data = prot_interface.read_eeprom()
+            pic_eeprom_data = protocol_interface.read_eeprom()
             if pic_eeprom_data == eeprom_data:
                 print('EEPROM verified.')
             else:
@@ -358,7 +402,7 @@ def program_pic(port: str, pic_type: str, hex_file_name: str, is_program: bool =
 
         if verification_result and (chip_info.get_core_bits() == 16):
             print('Committing 18Fxxxx fuse data.')
-            prot_interface.program_18fxxxx_fuse()
+            protocol_interface.program_18fxxxx_fuse()
 
     except InvalidResponseError as e:
         print('Error: Communication failure.  This may be a bug in this script or a problem with your programmer hardware. ({})'.format(e))
