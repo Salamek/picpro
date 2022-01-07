@@ -37,20 +37,17 @@ class ChipInfoReader:
         'PanelSizing': 'panel_sizing'
     }
 
-    def __init__(self, file_name='', file=None):
-        if not file:
-            file = open(file_name, 'U')
-
-        def handle_hex(xstr):
+    def __init__(self, file_name: str):
+        def handle_hex(xstr: str) -> int:
             return int(xstr, 16)
 
-        def handle_int(xstr):
+        def handle_int(xstr: str) -> int:
             return int(xstr, 10)
 
-        def handle_bool(xstr):
+        def handle_bool(xstr: str) -> bool:
             return self.boolean_dict[xstr]
 
-        def handle_core_type(xstr):
+        def handle_core_type(xstr: str) -> int:
             return ChipInfoEntry.core_type_dict[xstr]
 
         special_handlers = {
@@ -68,6 +65,7 @@ class ChipInfoReader:
             'program_delay': handle_int,
             'program_tries': handle_int,
             'rom_size': handle_hex,
+            'include': handle_bool
         }
 
         assignment_regexp = re.compile(r'^(\S+)\s*=\s*(.*)\s*$')
@@ -78,53 +76,54 @@ class ChipInfoReader:
         self.chip_entries = {}
         entry = None
         line_number = 0
-        for line in file:
-            line_number += 1
-            match = assignment_regexp.match(line)
-            if match:
-                lhs_raw, rhs = match.groups()
-                lhs = self.chip_info_key_replacements.get(lhs_raw)
-                if lhs is None:
-                    raise FormatError('Key replacement is None for {}'.format(lhs_raw))
-                # if lhs is 'chip_name', this is the start of a new section.
-                if lhs == 'chip_name':
-                    chip_name = rhs.lower()
-                    self.chip_entries[chip_name] = entry
-                    entry = {
-                        'chip_name': chip_name
-                    }
-                else:
-                    # General case. CHIPname must be valid.
-                    try:
-                        if lhs in special_handlers:
-                            entry[lhs] = special_handlers[lhs](rhs.lower())
-                        else:
-                            entry[lhs] = rhs
-                    except NameError:
-                        # Some extraneous line in the file...  do we care?
-                        raise FormatError('Assignment outside of chip definition @{}: {}'.format(line_number, line))
-            else:
-                match = fuse_list_regexp.match(line)
+        with open(file_name, 'r') as file:
+            for line in file:
+                line_number += 1
+                match = assignment_regexp.match(line)
                 if match:
-                    fuse, name, values_string = match.groups()
+                    lhs_raw, rhs = match.groups()
+                    lhs = self.chip_info_key_replacements.get(lhs_raw)
+                    if lhs is None:
+                        raise FormatError('Key replacement is None for {}'.format(lhs_raw))
+                    # if lhs is 'chip_name', this is the start of a new section.
+                    if lhs == 'chip_name':
+                        chip_name = rhs.lower()
+                        self.chip_entries[chip_name] = entry
+                        entry = {
+                            'chip_name': chip_name
+                        }
+                    else:
+                        # General case. CHIPname must be valid.
+                        try:
+                            if lhs in special_handlers:
+                                entry[lhs] = special_handlers[lhs](rhs.lower())
+                            else:
+                                entry[lhs] = rhs
+                        except NameError:
+                            # Some extraneous line in the file...  do we care?
+                            raise FormatError('Assignment outside of chip definition @{}: {}'.format(line_number, line))
+                else:
+                    match = fuse_list_regexp.match(line)
+                    if match:
+                        fuse, name, values_string = match.groups()
 
-                    fuses = entry.setdefault('fuses', {})
-                    fuses.setdefault(name, {})
+                        fuses = entry.setdefault('fuses', {})
+                        fuses.setdefault(name, {})
 
-                    values = fuse_value_regexp.findall(values_string)
-                    for value_pair in values:
-                        lhs, rhs = value_pair
-                        # rhs may have multiple fuse values, in the form
-                        #   xxxx&xxxx&xxxx...
-                        # This means that each xxxx applies to the next
-                        # consecutive fuse.
-                        fuse_values = list(map(lambda xstr: int(xstr, 16), rhs.split('&')))
-                        fuse_number = int(fuse)
-                        fuses[name][lhs] = zip(range(fuse_number - 1, (fuse_number + len(fuse_values) - 1)), fuse_values)
-                elif non_blank_regexp.match(line):
-                    raise FormatError('Unrecognized line format {}'.format(line))
+                        values = fuse_value_regexp.findall(values_string)
+                        for value_pair in values:
+                            lhs, rhs = value_pair
+                            # rhs may have multiple fuse values, in the form
+                            #   xxxx&xxxx&xxxx...
+                            # This means that each xxxx applies to the next
+                            # consecutive fuse.
+                            fuse_values = list(map(lambda xstr: int(xstr, 16), rhs.split('&')))
+                            fuse_number = int(fuse)
+                            fuses[name][lhs] = zip(range(fuse_number - 1, (fuse_number + len(fuse_values) - 1)), fuse_values)
+                    elif non_blank_regexp.match(line):
+                        raise FormatError('Unrecognized line format {}'.format(line))
 
-    def get_chip(self, name):
+    def get_chip(self, name: str) -> ChipInfoEntry:
         chip_entry = self.chip_entries[name.lower()]
 
         # @TODO We don't know what these are doing?!

@@ -1,24 +1,25 @@
 import struct
+import serial
 import time
-from typing import Union
-
+from typing import Union, List
+from pic_k150_programmer.IChipInfoEntry import IChipInfoEntry
 from pic_k150_programmer.exceptions import InvalidValueError, InvalidResponseError, InvalidCommandSequenceError
 
 
 class ProtocolInterface:
     """A convenient interface to the DIY serial/USB PIC programmer kits"""
 
-    def __init__(self, port):
+    def __init__(self, port: serial.Serial):
         self.port = port
         # We need to set the port timeout to a small value and use
         # polling to simulate variable timeouts.  Why?  Because any
         # time you set the timeout in the serial library, DTR goes
         # high, which resets any programmer other than the 149!
         self.port.timeout = .1
-        self.vars_set = False
+        self.chip_info_set = False
+        self.chip_info: Union[IChipInfoEntry, None] = None
         self.fuses_set = False
         self.firmware_type = None
-        self.vars = None
         self.reset()
 
     def _read(self, count: int = 1, timeout: Union[int, float, None] = 5) -> bytes:
@@ -39,36 +40,23 @@ class ProtocolInterface:
 
         return result
 
-    def _core_bits(self):
-        self._need_vars()
-        core_type = self.vars['core_type']
-
-        if core_type in [1, 2]:
-            return 16
-        elif core_type in [3, 5, 6, 7, 8, 9, 10]:
-            return 14
-        elif core_type in [4]:
-            return 12
-        else:
-            return None
-
-    def _expect(self, expected, timeout: Union[int, float, None] = 10):
+    def _expect(self, expected: bytes, timeout: Union[int, float, None] = 10) -> None:
         """Raise an exception if the expected response byte is not sent by the PIC programmer before timeout."""
         response = self._read(len(expected), timeout=timeout)
         if response != expected:
             raise InvalidResponseError('expected "{}" received {}'.format(expected, response))
 
-    def _need_vars(self):
-        if not self.vars_set:
-            raise InvalidCommandSequenceError('Vars not set')
+    def _need_chip_info(self) -> None:
+        if not self.chip_info_set:
+            raise InvalidCommandSequenceError('Chip info is not set')
 
-    def _need_fuses(self):
+    def _need_fuses(self) -> None:
         if not self.fuses_set:
             raise InvalidCommandSequenceError('Fuses not set')
 
-    def reset(self):
+    def reset(self) -> bool:
         """Resets the PIC Programmer's on-board controller."""
-        self.vars_set = False
+        self.chip_info_set = False
         self.fuses_set = False
         self.firmware_type = None
 
@@ -82,7 +70,7 @@ class ProtocolInterface:
         # then the unit is now on, and we should be seeing a 2 byte
         # response.
         response = self._read(2, timeout=.3)
-        if response == '':
+        if response == b'':
             # Apparently the unit operates with DTR high, so...
             self.port.setDTR(True)
             time.sleep(.1)
@@ -96,7 +84,7 @@ class ProtocolInterface:
             self.firmware_type, = struct.unpack('B', response[1])
         return result
 
-    def _command_start(self, cmd=None):
+    def _command_start(self, cmd: int = None) -> bool:
         # Send command 1: if we're at the jump table already this will
         # get us out.  If we're awaiting command start, this will
         # still echo 'Q' and await another command start.
@@ -119,12 +107,12 @@ class ProtocolInterface:
             self.port.write(cmd.to_bytes(1, 'little'))
         return result
 
-    def _null_command(self):
+    def _null_command(self) -> None:
         cmd = 0
         self.port.write(cmd)
         return None
 
-    def _command_end(self):
+    def _command_end(self) -> bool:
         cmd = b'\x01'
         self.port.write(cmd)
         ack = self._read(1, timeout=10)
@@ -136,7 +124,7 @@ class ProtocolInterface:
                 raise InvalidResponseError('No acknowledgement for command end.')
         return result
 
-    def echo(self, msg=b'X'):
+    def echo(self, msg: bytes = b'X') -> bytes:
         """Instructs the PIC programmer to echo back the message
         string.  Returns the PIC programmer's response."""
         cmd = b'\x02'
@@ -151,39 +139,34 @@ class ProtocolInterface:
         self._command_end()
         return result
 
-    def init_programming_vars(
-            self,
-            rom_size,
-            eeprom_size,
-            core_type,
-            flag_calibration_value_in_rom,
-            flag_band_gap_fuse,
-            flag_18f_single_panel_access_mode,
-            flag_vcc_vpp_delay,
-            program_delay,
-            power_sequence,
-            erase_mode,
-            program_retries,
-            over_program):
+    def init_programming_vars(self, chip_info: IChipInfoEntry, icsp_mode: bool = False) -> bool:
         """Inform PIC programmer of general parameters of PIC to be
          programmed.  Necessary for use of various other commands."""
+
+        programing_vars = chip_info.programming_vars
+
+        if icsp_mode:
+            if programing_vars.power_sequence == 2:
+                programing_vars.power_sequence = 1
+            elif programing_vars.power_sequence == 4:
+                programing_vars.power_sequence = 3
 
         cmd = 3
         self._command_start(cmd)
 
-        flags = ((flag_calibration_value_in_rom and 1) | (flag_band_gap_fuse and 2) | (flag_18f_single_panel_access_mode and 4) | (flag_vcc_vpp_delay and 8))
+        flags = ((programing_vars.flag_calibration_value_in_rom and 1) | (programing_vars.flag_band_gap_fuse and 2) | (programing_vars.flag_18f_single_panel_access_mode and 4) | (programing_vars.flag_vcc_vpp_delay and 8))
 
         command_payload = struct.pack(
             '>HHBBBBBBB',
-            rom_size,
-            eeprom_size,
-            core_type,
+            programing_vars.rom_size,
+            programing_vars.eeprom_size,
+            programing_vars.core_type,
             flags,
-            program_delay,
-            power_sequence,
-            erase_mode,
-            program_retries,
-            over_program
+            programing_vars.program_delay,
+            programing_vars.power_sequence,
+            programing_vars.erase_mode,
+            programing_vars.program_retries,
+            programing_vars.over_program
         )
 
         self.port.write(command_payload)
@@ -192,32 +175,19 @@ class ProtocolInterface:
 
         result = (response == b'I')
         if result:
-            self.vars = {
-                'rom_size': rom_size,
-                'eeprom_size': eeprom_size,
-                'core_type': core_type,
-                'flag_calibration_value_in_rom': flag_calibration_value_in_rom,
-                'flag_band_gap_fuse': flag_band_gap_fuse,
-                'flag_18f_single_panel_access_mode': flag_18f_single_panel_access_mode,
-                'flag_vcc_vpp_delay': flag_vcc_vpp_delay,
-                'program_delay': program_delay,
-                'power_sequence': power_sequence,
-                'erase_mode': erase_mode,
-                'program_retries': program_retries,
-                'over_program': over_program
-            }
-            self.vars_set = True
+            self.chip_info = chip_info
+            self.chip_info_set = True
         else:
-            del self.vars
-            self.vars_set = False
+            del self.chip_info
+            self.chip_info_set = False
         return result
 
-    def _set_programming_voltages_command(self, on):
+    def _set_programming_voltages_command(self, on: bool) -> bool:
         """Turn the PIC programming voltages on or off.  Must be called as part of other commands which read or write PIC data."""
         cmd_on = 4
         cmd_off = 5
 
-        self._need_vars()
+        self._need_chip_info()
         if on:
             self.port.write(cmd_on.to_bytes(1, 'little'))
             expect = b'V'
@@ -227,21 +197,21 @@ class ProtocolInterface:
         response = self._read(1)
         return response == expect
 
-    def cycle_programming_voltages(self):
+    def cycle_programming_voltages(self) -> bool:
         cmd = 6
-        self._need_vars()
+        self._need_chip_info()
         self._command_start(cmd)
         response = self._read(1)
         self._command_end()
         return response == b'V'
 
-    def program_rom(self, data: bytearray):
+    def program_rom(self, data: bytearray) -> bool:
         """Write data to ROM.  data should be a binary string of data, high byte first."""
         cmd = 7
-        self._need_vars()
+        self._need_chip_info()
 
         word_count = (len(data) // 2)
-        if self.vars['rom_size'] < word_count:
+        if self.chip_info.programming_vars.rom_size < word_count:
             raise InvalidValueError('Data too large for PIC ROM')
 
         if ((word_count * 2) % 32) != 0:
@@ -270,13 +240,13 @@ class ProtocolInterface:
         self._command_end()
         return True
 
-    def program_eeprom(self, data):
+    def program_eeprom(self, data: bytes) -> bool:
         """Write data to EEPROM.  Data size must be small enough to fit in EEPROM."""
         cmd = 8
-        self._need_vars()
+        self._need_chip_info()
 
         byte_count = len(data)
-        if self.vars['eeprom_size'] < byte_count:
+        if self.chip_info.programming_vars.eeprom_size < byte_count:
             raise InvalidValueError('Data too large for PIC EEPROM')
 
         if (byte_count % 2) != 0:
@@ -304,13 +274,13 @@ class ProtocolInterface:
         self._command_end()
         return True
 
-    def program_id_fuses(self, pic_id, fuses):
+    def program_id_fuses(self, pic_id: bytes, fuses: List[int]) -> bool:
         """Program PIC ID and fuses.  For 16-bit processors, fuse values
         are not committed until program_18fxxxx_fuse() is called."""
         cmd = 9
-        self._need_vars()
+        self._need_chip_info()
 
-        core_bits = self._core_bits()
+        core_bits = self.chip_info.get_core_bits()
         if core_bits == 16:
             if len(pic_id) != 8:
                 raise InvalidValueError('Should have 8-byte ID for 16 bit core.')
@@ -346,10 +316,10 @@ class ProtocolInterface:
     def read_rom(self) -> bytes:
         """Returns contents of PIC ROM as a string of big-endian values."""
         cmd = 11
-        self._need_vars()
+        self._need_chip_info()
 
         # vars['rom_size'] is in words.  So multiply by two to get bytes.
-        rom_size = self.vars['rom_size'] * 2
+        rom_size = self.chip_info.programming_vars.rom_size * 2
 
         self._command_start()
         self._set_programming_voltages_command(True)
@@ -363,9 +333,9 @@ class ProtocolInterface:
     def read_eeprom(self) -> bytes:
         """Returns data stored in PIC EEPROM."""
         cmd = 12
-        self._need_vars()
+        self._need_chip_info()
 
-        eeprom_size = self.vars['eeprom_size']
+        eeprom_size = self.chip_info.programming_vars.eeprom_size
 
         self._command_start()
         self._set_programming_voltages_command(True)
@@ -375,7 +345,7 @@ class ProtocolInterface:
         self._command_end()
         return response
 
-    def read_config(self):
+    def read_config(self) -> dict:
         """Reads chip ID and programmed ID, fuses, and calibration."""
         cmd = 13
         self._command_start()
@@ -395,10 +365,10 @@ class ProtocolInterface:
                   'calibrate': config[16]}
         return result
 
-    def erase_chip(self):
+    def erase_chip(self) -> bool:
         """Erases all data from chip."""
         cmd = 14
-        self._need_vars()
+        self._need_chip_info()
 
         self._command_start()
         self._set_programming_voltages_command(True)
@@ -408,12 +378,12 @@ class ProtocolInterface:
         self._command_end()
         return response == b'Y'
 
-    def rom_is_blank(self, high_byte):
+    def rom_is_blank(self, high_byte: bytes) -> bool:
         """Returns True if PIC ROM is blank."""
         cmd = 15
-        self._need_vars()
+        self._need_chip_info()
 
-        expected_b_bytes = (self.vars['rom_size'] // 256) - 1
+        expected_b_bytes = (self.chip_info.programming_vars.rom_size // 256) - 1
         self._command_start(cmd)
         self.port.write(high_byte)
         while True:
@@ -433,7 +403,7 @@ class ProtocolInterface:
             else:
                 raise InvalidResponseError('Unexpected byte in rom_is_blank(): {}'.format(response))
 
-    def eeprom_is_blank(self):
+    def eeprom_is_blank(self) -> bool:
         """Returns True if PIC EEPROM is blank."""
         cmd = 16
         self._command_start(cmd)
@@ -444,10 +414,10 @@ class ProtocolInterface:
 
         return response == b'Y'
 
-    def program_18fxxxx_fuse(self):
+    def program_18fxxxx_fuse(self) -> bool:
         """Commits fuse values previously loaded using program_id_fuses()"""
         cmd = 17
-        self._need_vars()
+        self._need_chip_info()
         self._need_fuses()
         self._command_start(cmd)
         # It appears the command will return 'B' on chips for which
@@ -458,7 +428,7 @@ class ProtocolInterface:
 
         return result
 
-    def wait_until_chip_in_socket(self):
+    def wait_until_chip_in_socket(self) -> bool:
         """Blocks until a chip is inserted in the programming socket."""
         cmd = 18
         self._command_start(cmd)
@@ -468,7 +438,7 @@ class ProtocolInterface:
         self._command_end()
         return True
 
-    def wait_until_chip_out_of_socket(self):
+    def wait_until_chip_out_of_socket(self) -> bool:
         """Blocks until chip is removed from programming socket."""
         cmd = 19
 
@@ -479,7 +449,7 @@ class ProtocolInterface:
         self._command_end()
         return True
 
-    def programmer_firmware_version(self):
+    def programmer_firmware_version(self) -> bytes:
         """Returns the PIC programmer's numeric firmware version."""
         cmd = 20
         self._command_start(cmd)
@@ -488,7 +458,7 @@ class ProtocolInterface:
         result, = struct.unpack('B', response)
         return result
 
-    def programmer_protocol(self):
+    def programmer_protocol(self) -> bytes:
         """Returns the PIC programmer's protocol version in text form."""
         cmd = 21
         self._command_start(cmd)
@@ -498,10 +468,10 @@ class ProtocolInterface:
         self._command_end()
         return response
 
-    def program_debug_vector(self, address):
+    def program_debug_vector(self, address: bytes) -> bool:
         """Sets the PIC's debugging vector."""
         cmd = 22
-        self._need_vars()
+        self._need_chip_info()
 
         be4_address = struct.pack('>I', address)
         self._command_start(cmd)
@@ -514,10 +484,10 @@ class ProtocolInterface:
 
         return response == b'Y'
 
-    def read_debug_vector(self):
+    def read_debug_vector(self) -> bytes:
         """Returns the value of the PIC's debugging vector."""
         cmd = 23
-        self._need_vars()
+        self._need_chip_info()
 
         self._command_start(cmd)
         response = self._read(4)

@@ -112,7 +112,7 @@ def verify():
     )
 
 
-def program_pic(port, pic_type, hex_file_name='', is_program=True, fuses=None, pic_id=None, icsp_mode=False):
+def program_pic(port: str, pic_type: str, hex_file_name: str, is_program: bool = True, fuses: dict = None, pic_id: str = None, icsp_mode: bool = False):
     """Given a serial port ID, PIC type, hex file name, and other optional
        data, attempt to program the hex file data to a PIC in the programmer."""
     try:
@@ -125,7 +125,6 @@ def program_pic(port, pic_type, hex_file_name='', is_program=True, fuses=None, p
         return False
 
     # Get chip info
-    #chip_info_filename = module_location + 'chipinfo.cid'
     chip_info_filename = module_location + 'chipdata.cid'
     try:
         chip_info_reader = ChipInfoReader(chip_info_filename)
@@ -282,16 +281,7 @@ def program_pic(port, pic_type, hex_file_name='', is_program=True, fuses=None, p
         return False
 
     # Initialize programming variables
-    programming_vars = chip_info.get_programming_vars()
-    if icsp_mode:
-        power_sequence = programming_vars['power_sequence']
-        if power_sequence == 2:
-            power_sequence = 1
-        elif power_sequence == 4:
-            power_sequence = 3
-        programming_vars['power_sequence'] = power_sequence
-
-    prot_interface.init_programming_vars(**programming_vars)
+    prot_interface.init_programming_vars(chip_info, icsp_mode=icsp_mode)
 
     #print('Programmer version is: {}'.format(prot_interface.programmer_firmware_version()))
 

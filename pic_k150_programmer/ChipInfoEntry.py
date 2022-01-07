@@ -1,8 +1,11 @@
+from typing import Union
+from pic_k150_programmer.IChipInfoEntry import IChipInfoEntry
+from pic_k150_programmer.ProgrammingVars import ProgrammingVars
 from pic_k150_programmer.exceptions import FuseError
 from pic_k150_programmer.tools import indexwise_and
 
 
-class ChipInfoEntry:
+class ChipInfoEntry(IChipInfoEntry):
     """A single entry from a chipinfo file, with methods for feeding data to protocol_interface."""
 
     core_type_dict = {
@@ -51,11 +54,11 @@ class ChipInfoEntry:
     }
 
     def __init__(self,
-                 chip_name, include, socket_image, erase_mode,
-                 flash_chip, power_sequence, program_delay, program_tries,
-                 over_program, core_type, rom_size, eeprom_size,
-                 fuse_blank, cp_warn, cal_word, band_gap, icsp_only,
-                 chip_id, fuses):
+                 chip_name: str, include: bool, socket_image: str, erase_mode: int,
+                 flash_chip: bool, power_sequence: str, program_delay: int, program_tries: int,
+                 over_program: int, core_type: int, rom_size: int, eeprom_size: int,
+                 fuse_blank: list, cp_warn: bool, cal_word: bool, band_gap: bool, icsp_only: bool,
+                 chip_id: int, fuses: dict):
 
         self.vars = {
             'CHIPname': chip_name,
@@ -80,9 +83,10 @@ class ChipInfoEntry:
             'fuses': fuses
         }
 
-    def get_programming_vars(self):
-        """Returns a dictionary which can be fed as arguments to Protocol_Interface.init_programming_vars()"""
-        result = dict(
+    @property
+    def programming_vars(self) -> ProgrammingVars:
+        """Returns a ProgrammingVars"""
+        return ProgrammingVars(
             rom_size=self.vars['rom_size'],
             eeprom_size=self.vars['eeprom_size'],
             core_type=self.vars['core_type'],
@@ -95,11 +99,10 @@ class ChipInfoEntry:
             power_sequence=self.vars['power_sequence'],
             erase_mode=self.vars['erase_mode'],
             program_retries=self.vars['program_tries'],
-            over_program=self.vars['over_program'])
+            over_program=self.vars['over_program']
+        )
 
-        return result
-
-    def get_core_bits(self):
+    def get_core_bits(self) -> Union[int, None]:
         core_type = self.vars['core_type']
 
         if core_type in [1, 2]:
@@ -111,7 +114,7 @@ class ChipInfoEntry:
         else:
             return None
 
-    def decode_fuse_data(self, fuse_values):
+    def decode_fuse_data(self, fuse_values: list) -> dict:
         """Given a list of fuse values, return a dict of symbolic
         (fuse : value) mapping representing the fuses that are set."""
 
@@ -134,14 +137,11 @@ class ChipInfoEntry:
             for setting in fuse_settings:
                 setting_value = fuse_settings[setting]
 
-                if (indexwise_and(fuse_values, setting_value) ==
-                        fuse_values):
+                if indexwise_and(fuse_values, setting_value) == fuse_values:
                     # If this setting value clears more bits than
                     # best_value, it's our new best value.
-                    if (indexwise_and(best_value, setting_value) !=
-                            best_value):
-                        best_value = indexwise_and(best_value,
-                                                   setting_value)
+                    if indexwise_and(best_value, setting_value) != best_value:
+                        best_value = indexwise_and(best_value, setting_value)
                         result[fuse_param] = setting
                         fuse_identified = True
             if not fuse_identified:
@@ -149,7 +149,7 @@ class ChipInfoEntry:
 
         return result
 
-    def encode_fuse_data(self, fuse_dict):
+    def encode_fuse_data(self, fuse_dict: dict) -> list:
         result = list(self.vars['FUSEblank'])
         fuse_param_list = self.vars['fuses']
         for fuse in fuse_dict:
@@ -166,13 +166,13 @@ class ChipInfoEntry:
 
         return result
 
-    def has_eeprom(self):
+    def has_eeprom(self) -> bool:
         return self.vars['eeprom_size'] != 0
 
-    def pin1_location_text(self):
+    def pin1_location_text(self) -> str:
         return self.socket_image_dict[self.vars['SocketImage']]
 
-    def fuse_doc(self):
+    def fuse_doc(self) -> str:
         result = ''
         fuse_param_list = self.vars['fuses']
         for fuse in fuse_param_list:
