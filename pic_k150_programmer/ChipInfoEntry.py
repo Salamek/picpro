@@ -61,9 +61,9 @@ class ChipInfoEntry(IChipInfoEntry):
                  chip_id: int, fuses: dict):
 
         self.vars = {
-            'CHIPname': chip_name,
-            'INCLUDE': include,
-            'SocketImage': socket_image,
+            'chip_name': chip_name,
+            'include': include,
+            'socket_image': socket_image,
             'erase_mode': erase_mode,
             'FlashChip': flash_chip,
             'power_sequence': self.power_sequence_dict[power_sequence],
@@ -74,12 +74,12 @@ class ChipInfoEntry(IChipInfoEntry):
             'core_type': core_type,
             'rom_size': rom_size,
             'eeprom_size': eeprom_size,
-            'FUSEblank': fuse_blank,
-            'CPwarn': cp_warn,
+            'fuse_blank': fuse_blank,
+            'cp_warn': cp_warn,
             'flag_calibration_value_in_rom': cal_word,
             'flag_band_gap_fuse': band_gap,
-            'ICSPonly': icsp_only,
-            'ChipID': chip_id,
+            'icsp_only': icsp_only,
+            'chip_id': chip_id,
             'fuses': fuses
         }
 
@@ -99,7 +99,8 @@ class ChipInfoEntry(IChipInfoEntry):
             power_sequence=self.vars['power_sequence'],
             erase_mode=self.vars['erase_mode'],
             program_retries=self.vars['program_tries'],
-            over_program=self.vars['over_program']
+            over_program=self.vars['over_program'],
+            fuse_blank=self.vars['fuse_blank'],
         )
 
     def get_core_bits(self) -> Union[int, None]:
@@ -150,7 +151,7 @@ class ChipInfoEntry(IChipInfoEntry):
         return result
 
     def encode_fuse_data(self, fuse_dict: dict) -> list:
-        result = list(self.vars['FUSEblank'])
+        result = list(self.vars['fuse_blank'])
         fuse_param_list = self.vars['fuses']
         for fuse in fuse_dict:
             fuse_value = fuse_dict[fuse]
@@ -170,7 +171,7 @@ class ChipInfoEntry(IChipInfoEntry):
         return self.vars['eeprom_size'] != 0
 
     def pin1_location_text(self) -> str:
-        return self.socket_image_dict[self.vars['SocketImage']]
+        return self.socket_image_dict[self.vars['socket_image']]
 
     def fuse_doc(self) -> str:
         result = ''

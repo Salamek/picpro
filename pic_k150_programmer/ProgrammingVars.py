@@ -1,3 +1,6 @@
+from typing import List
+
+
 class ProgrammingVars:
     def __init__(self, rom_size: int,
                  eeprom_size: int,
@@ -10,7 +13,9 @@ class ProgrammingVars:
                  power_sequence: int,
                  erase_mode: int,
                  program_retries: int,
-                 over_program: int):
+                 over_program: int,
+                 fuse_blank: List[int]
+                 ):
         self.rom_size = rom_size
         self.eeprom_size = eeprom_size
         self.core_type = core_type
@@ -23,3 +28,4 @@ class ProgrammingVars:
         self.erase_mode = erase_mode
         self.program_retries = program_retries
         self.over_program = over_program
+        self.fuse_blank = fuse_blank
