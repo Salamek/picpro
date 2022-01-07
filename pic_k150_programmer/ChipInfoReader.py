@@ -2,7 +2,6 @@ import re
 
 from pic_k150_programmer.ChipInfoEntry import ChipInfoEntry
 from pic_k150_programmer.exceptions import FormatError
-from pic_k150_programmer.HexInt import HexInt
 
 
 class ChipInfoReader:
@@ -43,7 +42,7 @@ class ChipInfoReader:
             file = open(file_name, 'U')
 
         def handle_hex(xstr):
-            return HexInt(xstr, 16)
+            return int(xstr, 16)
 
         def handle_int(xstr):
             return int(xstr, 10)
@@ -63,7 +62,7 @@ class ChipInfoReader:
             'eeprom_size': handle_hex,
             'erase_mode': handle_int,
             'flash_chip': handle_bool,
-            'fuse_blank': (lambda xstr: map(lambda x: HexInt(x, 16), xstr.split(' '))),
+            'fuse_blank': (lambda xstr: map(lambda x: int(x, 16), xstr.split(' '))),
             'icsp_only': handle_bool,
             'over_program': handle_int,
             'program_delay': handle_int,
@@ -119,7 +118,7 @@ class ChipInfoReader:
                         #   xxxx&xxxx&xxxx...
                         # This means that each xxxx applies to the next
                         # consecutive fuse.
-                        fuse_values = list(map(lambda xstr: HexInt(xstr, 16), rhs.split('&')))
+                        fuse_values = list(map(lambda xstr: int(xstr, 16), rhs.split('&')))
                         fuse_number = int(fuse)
                         fuses[name][lhs] = zip(range(fuse_number - 1, (fuse_number + len(fuse_values) - 1)), fuse_values)
                 elif non_blank_regexp.match(line):

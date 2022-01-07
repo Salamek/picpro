@@ -35,7 +35,6 @@ from docopt import docopt
 from pic_k150_programmer.ChipInfoReader import ChipInfoReader
 from pic_k150_programmer.HexFileReader import HexFileReader
 from pic_k150_programmer.ProtocolInterface import ProtocolInterface
-from pic_k150_programmer.HexInt import HexInt
 from pic_k150_programmer.exceptions import FuseError, InvalidResponseError
 from pic_k150_programmer.tools import range_filter_records, swab_record, merge_records
 
@@ -252,7 +251,7 @@ def program_pic(port, pic_type, hex_file_name='', is_program=True, fuses=None, p
     # Go through each fuse listed in chip info.
     # Determine its current setting in fuse_value, and accumulate a new
     # fuse_value by incorporating values specified in (fuses).
-    fuse_values = [HexInt(struct.unpack('>H', fuse_data[x:x + 2])[0]) for x in range(0, len(fuse_data), 2)]
+    fuse_values = [int(struct.unpack('>H', fuse_data[x:x + 2])[0]) for x in range(0, len(fuse_data), 2)]
     # for i in xrange(0, len(fuse_blank)):
     # fuse_value[i] = struct.unpack('>H', fuse_data[i*2, i*2+2])
     if fuses:
