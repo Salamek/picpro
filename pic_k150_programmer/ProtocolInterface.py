@@ -2,7 +2,6 @@ import struct
 import time
 from typing import Union
 
-from pic_k150_programmer.DataString import DataString
 from pic_k150_programmer.exceptions import InvalidValueError, InvalidResponseError, InvalidCommandSequenceError
 
 
@@ -22,13 +21,13 @@ class ProtocolInterface:
         self.vars = None
         self.reset()
 
-    def _read(self, count: int = 1, timeout: Union[int, float, None] = 5):
+    def _read(self, count: int = 1, timeout: Union[int, float, None] = 5) -> bytes:
         # _read(count, timeout)
         # Read bytes from the port.  Stop when the requested number of
         # bytes have been received, or the timeout has passed.  In order
         # to sidestep issues with the serial library this is done by
         # polling the serial port's read() method.
-        result = ''
+        result = b''
         init_time = time.time()
         end_time = None
         if timeout is not None:
@@ -90,7 +89,7 @@ class ProtocolInterface:
             response = self._read(2, timeout=.3)
 
         if len(response) >= 1:
-            result = (response[0] == 'B')
+            result = (response[0] == b'B')
         else:
             result = False
         if result and (len(response) == 2):
@@ -101,49 +100,52 @@ class ProtocolInterface:
         # Send command 1: if we're at the jump table already this will
         # get us out.  If we're awaiting command start, this will
         # still echo 'Q' and await another command start.
-        self.port.write('\x01')
-        self._expect('Q')
+
+        self.port.write(b'\x01')
+        self._expect(b'Q')
 
         # Start command, go to jump table.
-        self.port.write('P')
+        self.port.write(b'P')
 
         # Check for acknowledgement
         ack = self._read(1)
-        result = (ack == 'P')
+        result = (ack == b'P')
         if not result:
             raise InvalidResponseError('No acknowledgement for command start.')
 
+        result = True
         # Send command number, if specified
         if cmd is not None:
-            self.port.write(chr(cmd))
+            self.port.write(cmd.to_bytes(1, 'little'))
         return result
 
     def _null_command(self):
         cmd = 0
-        self.port.write(chr(cmd))
+        self.port.write(cmd)
         return None
 
     def _command_end(self):
-        cmd = 1
-        self.port.write(chr(cmd))
+        cmd = b'\x01'
+        self.port.write(cmd)
         ack = self._read(1, timeout=10)
-        result = (ack == 'Q')
+        result = (ack == b'Q')
         if not result:
-            if ack != '':
+            if ack != b'':
                 raise InvalidResponseError('Unexpected response ("{}") in command end.'.format(ack))
             else:
                 raise InvalidResponseError('No acknowledgement for command end.')
         return result
 
-    def echo(self, msg='X'):
+    def echo(self, msg=b'X'):
         """Instructs the PIC programmer to echo back the message
         string.  Returns the PIC programmer's response."""
-        cmd = 2
+        cmd = b'\x02'
         self._command_start()
-        result = ''
+        result = b''
+
         for c in msg:
-            self.port.write(chr(cmd))
-            self.port.write(c)
+            self.port.write(cmd)
+            self.port.write(c.to_bytes(1, 'little'))
             response = self._read(1)
             result = result + response
         self._command_end()
@@ -188,13 +190,13 @@ class ProtocolInterface:
         response = self._read(1)
         self._command_end()
 
-        result = (response == 'I')
+        result = (response == b'I')
         if result:
             self.vars = {
                 'rom_size': rom_size,
                 'eeprom_size': eeprom_size,
                 'core_type': core_type,
-                'flag_calibration_value_in_ROM': flag_calibration_value_in_rom,
+                'flag_calibration_value_in_rom': flag_calibration_value_in_rom,
                 'flag_band_gap_fuse': flag_band_gap_fuse,
                 'flag_18f_single_panel_access_mode': flag_18f_single_panel_access_mode,
                 'flag_vcc_vpp_delay': flag_vcc_vpp_delay,
@@ -217,11 +219,11 @@ class ProtocolInterface:
 
         self._need_vars()
         if on:
-            self.port.write(chr(cmd_on))
-            expect = 'V'
+            self.port.write(cmd_on.to_bytes(1, 'little'))
+            expect = b'V'
         else:
-            self.port.write(chr(cmd_off))
-            expect = 'v'
+            self.port.write(cmd_off.to_bytes(1, 'little'))
+            expect = b'v'
         response = self._read(1)
         return response == expect
 
@@ -231,9 +233,9 @@ class ProtocolInterface:
         self._command_start(cmd)
         response = self._read(1)
         self._command_end()
-        return response == 'V'
+        return response == b'V'
 
-    def program_rom(self, data):
+    def program_rom(self, data: bytearray):
         """Write data to ROM.  data should be a binary string of data, high byte first."""
         cmd = 7
         self._need_vars()
@@ -247,18 +249,20 @@ class ProtocolInterface:
 
         self._command_start()
         self._set_programming_voltages_command(True)
-        self.port.write(chr(cmd))
+
+        self.port.write(cmd.to_bytes(1, 'little'))
 
         word_count_message = struct.pack('>H', word_count)
         self.port.write(word_count_message)
+        self._expect(b'Y', timeout=20)
 
-        self._expect('Y', timeout=20)
         try:
             for i in range(0, (word_count * 2), 32):
-                self.port.write(data[i:(i + 32)])
-                self._expect('Y', timeout=20)
-            self._expect('P', timeout=20)
-        except InvalidResponseError:
+                to_write = data[i:(i + 32)]
+                self.port.write(to_write)
+                self._expect(b'Y', timeout=20)
+            self._expect(b'P', timeout=20)
+        except InvalidResponseError as e:
             self.port.flushInput()  # We don't get current address for now.
             return False
 
@@ -280,21 +284,21 @@ class ProtocolInterface:
 
         self._command_start()
         self._set_programming_voltages_command(True)
-        self.port.write(chr(cmd))
+        self.port.write(cmd.to_bytes(1, 'little'))
 
         byte_count_message = struct.pack('>H', byte_count)
         self.port.write(byte_count_message)
 
-        self._expect('Y', timeout=20)
+        self._expect(b'Y', timeout=20)
         for i in range(0, byte_count, 2):
             self.port.write(data[i:(i + 2)])
-            self._expect('Y', timeout=20)
+            self._expect(b'Y', timeout=20)
         # We must send an extra two bytes, which will have no effect.
         # Why?  I'm not sure.  See protocol doc, and read it backwards.
         # I'm sending zeros because if we did wind up back at the
         # command jump table, then the zeros will have no effect.
-        self.port.write('\x00\x00')
-        self._expect('P', timeout=20)
+        self.port.write(b'\x00\x00')
+        self._expect(b'P', timeout=20)
 
         self._set_programming_voltages_command(False)
         self._command_end()
@@ -312,20 +316,20 @@ class ProtocolInterface:
                 raise InvalidValueError('Should have 8-byte ID for 16 bit core.')
             if len(fuses) != 7:
                 raise InvalidValueError('Should have 7 fuses for 16 bit core.')
-            command_body = ('00' + pic_id + struct.pack('<HHHHHHH', *fuses).decode('ASCI'))  # @FIXME Add ASCI
-            response_ok = 'Y'
+            command_body = (b'00' + pic_id + struct.pack('<HHHHHHH', *fuses))
+            response_ok = b'Y'
         else:
             if len(fuses) != 1:
                 raise InvalidValueError('Should have one fuse for 14 bit core.')
             if len(pic_id) != 4:
                 raise InvalidValueError('Should have 4-byte ID for 14 bit core.')
             # Command starts with dual '0' for 14 bit
-            command_body = ('00' + pic_id + 'FFFF' + struct.pack('<H', fuses[0]).decode('ASCI') + ('\xff\xff' * 6))  # @FIXME Add ASCI
-            response_ok = 'Y'
+            command_body = (b'00' + pic_id + b'FFFF' + struct.pack('<H', fuses[0]) + (b'\xff\xff' * 6))
+            response_ok = b'Y'
 
         self._command_start()
         self._set_programming_voltages_command(True)
-        self.port.write(chr(cmd))
+        self.port.write(cmd.to_bytes(1, 'little'))
 
         self.port.write(command_body)
 
@@ -339,7 +343,7 @@ class ProtocolInterface:
 
         return response == response_ok
 
-    def read_rom(self):
+    def read_rom(self) -> bytes:
         """Returns contents of PIC ROM as a string of big-endian values."""
         cmd = 11
         self._need_vars()
@@ -349,15 +353,14 @@ class ProtocolInterface:
 
         self._command_start()
         self._set_programming_voltages_command(True)
-        self.port.write(chr(cmd))
+        self.port.write(cmd.to_bytes(1, 'little'))
 
         response = self._read(rom_size)
-
         self._set_programming_voltages_command(False)
         self._command_end()
-        return DataString(response)
+        return response
 
-    def read_eeprom(self):
+    def read_eeprom(self) -> bytes:
         """Returns data stored in PIC EEPROM."""
         cmd = 12
         self._need_vars()
@@ -366,20 +369,20 @@ class ProtocolInterface:
 
         self._command_start()
         self._set_programming_voltages_command(True)
-        self.port.write(chr(cmd))
+        self.port.write(cmd.to_bytes(1, 'little'))
         response = self._read(eeprom_size)
         self._set_programming_voltages_command(False)
         self._command_end()
-        return DataString(response)
+        return response
 
     def read_config(self):
         """Reads chip ID and programmed ID, fuses, and calibration."""
         cmd = 13
         self._command_start()
         self._set_programming_voltages_command(True)
-        self.port.write(chr(cmd))
+        self.port.write(cmd.to_bytes(1, 'little'))
         ack = self._read(1)
-        if ack != 'C':
+        if ack != b'C':
             raise InvalidResponseError('No acknowledgement from read_config()')
         response = self._read(26)
         self._set_programming_voltages_command(False)
@@ -387,7 +390,7 @@ class ProtocolInterface:
 
         config = struct.unpack('<HccccccccHHHHHHHH', response)
         result = {'chip_id': config[0],
-                  'id': ''.join(config[1:9]),
+                  'id': b''.join(config[1:9]),
                   'fuses': list(config[9:16]),
                   'calibrate': config[16]}
         return result
@@ -397,10 +400,13 @@ class ProtocolInterface:
         cmd = 14
         self._need_vars()
 
-        self._command_start(cmd)
+        self._command_start()
+        self._set_programming_voltages_command(True)
+        self.port.write(cmd.to_bytes(1, 'little'))
         response = self._read(1)
+        self._set_programming_voltages_command(False)
         self._command_end()
-        return response == 'Y'
+        return response == b'Y'
 
     def rom_is_blank(self, high_byte):
         """Returns True if PIC ROM is blank."""
@@ -412,16 +418,16 @@ class ProtocolInterface:
         self.port.write(high_byte)
         while True:
             response = self._read(1)
-            if response == 'Y':
+            if response == b'Y':
                 self._command_end()
                 return True
-            if response == 'N':
+            if response == b'N':
                 self._command_end()
                 return False
-            if response == 'C':
+            if response == b'C':
                 self._command_end()
                 return False
-            if response == 'B':
+            if response == b'B':
                 if expected_b_bytes <= 0:
                     raise InvalidResponseError('Received wrong number of "B" bytes in rom_is_blank()')
             else:
@@ -433,22 +439,21 @@ class ProtocolInterface:
         self._command_start(cmd)
         response = self._read(1)
         self._command_end()
-        if (response != 'Y') and (response != 'N'):
+        if (response != b'Y') and (response != b'N'):
             raise InvalidResponseError('Unexpected response in eeprom_is_blank(): {}'.format(response))
 
-        return response == 'Y'
+        return response == b'Y'
 
     def program_18fxxxx_fuse(self):
         """Commits fuse values previously loaded using program_id_fuses()"""
         cmd = 17
-
         self._need_vars()
         self._need_fuses()
         self._command_start(cmd)
         # It appears the command will return 'B' on chips for which
         # this isn't appropriate?
         response = self._read(1)
-        result = response == 'Y'
+        result = response == b'Y'
         self._command_end()
 
         return result
@@ -456,11 +461,10 @@ class ProtocolInterface:
     def wait_until_chip_in_socket(self):
         """Blocks until a chip is inserted in the programming socket."""
         cmd = 18
-
         self._command_start(cmd)
-        self._expect('A')
+        self._expect(b'A')
 
-        self._expect('Y', timeout=None)
+        self._expect(b'Y', timeout=None)
         self._command_end()
         return True
 
@@ -469,9 +473,9 @@ class ProtocolInterface:
         cmd = 19
 
         self._command_start(cmd)
-        self._expect('A')
+        self._expect(b'A')
 
-        self._expect('Y', timeout=None)
+        self._expect(b'Y', timeout=None)
         self._command_end()
         return True
 
@@ -505,10 +509,10 @@ class ProtocolInterface:
         response = self._read(1)
         self._command_end()
 
-        if (response != 'Y') and (response != 'N'):
+        if (response != b'Y') and (response != b'N'):
             raise InvalidResponseError('Unexpected response in program_debug_vector(): {}'.format(response))
 
-        return response == 'Y'
+        return response == b'Y'
 
     def read_debug_vector(self):
         """Returns the value of the PIC's debugging vector."""
@@ -517,7 +521,7 @@ class ProtocolInterface:
 
         self._command_start(cmd)
         response = self._read(4)
-        be4_address = '\x00' + response[1:4]
+        be4_address = b'\x00' + response[1:4]
         result, = struct.unpack('>I', be4_address)
         self._command_end()
 

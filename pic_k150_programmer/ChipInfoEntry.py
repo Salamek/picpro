@@ -18,7 +18,8 @@ class ChipInfoEntry:
         'bit14_f': 10,
         'bit12_b': 11,
         'bit14_h': 12,
-        'bit16_c': 13
+        'bit16_c': 13,
+        'newf12b': None  # !FIXME Not in docs
     }
 
     power_sequence_dict = {
@@ -72,7 +73,7 @@ class ChipInfoEntry:
             'eeprom_size': eeprom_size,
             'FUSEblank': fuse_blank,
             'CPwarn': cp_warn,
-            'flag_calibration_value_in_ROM': cal_word,
+            'flag_calibration_value_in_rom': cal_word,
             'flag_band_gap_fuse': band_gap,
             'ICSPonly': icsp_only,
             'ChipID': chip_id,
@@ -85,7 +86,7 @@ class ChipInfoEntry:
             rom_size=self.vars['rom_size'],
             eeprom_size=self.vars['eeprom_size'],
             core_type=self.vars['core_type'],
-            flag_calibration_value_in_ROM=self.vars['flag_calibration_value_in_ROM'],
+            flag_calibration_value_in_rom=self.vars['flag_calibration_value_in_rom'],
             flag_band_gap_fuse=self.vars['flag_band_gap_fuse'],
             # T.Nixon says this is the rule for this flag.
             flag_18f_single_panel_access_mode=(self.vars['core_type'] == self.core_type_dict['bit16_a']),

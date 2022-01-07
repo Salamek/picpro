@@ -1,50 +1,3 @@
-class hex_int(int):
-    # @TODO WTH?
-    """Behaves just like an integer, except its __repr__ in python yields a hex string."""
-
-    def __init__(self, value, radix=16):
-        int.__init__(self, value, radix)
-
-    def __repr__(self):
-        if self >= 0:
-            return hex(self)
-        else:
-            # Avoid "future" warning and ensure eval(repr(self)) == self
-            return '-' + hex(-self)
-
-    def maybe_hex_int(value):
-        if isinstance(value, int):
-            return hex_int(value)
-        else:
-            return value
-
-    maybe_hex_int = staticmethod(maybe_hex_int)
-
-    _method_wrap = lambda super_method_name: lambda *args, **argd: hex_int.maybe_hex_int(int.__dict__[super_method_name](*args, **argd))
-
-    __abs__ = _method_wrap('__abs__')
-    __add__ = _method_wrap('__add__')
-    __and__ = _method_wrap('__and__')
-    __floordiv__ = _method_wrap('__floordiv__')
-    __invert__ = _method_wrap('__invert__')
-    __lshift__ = _method_wrap('__lshift__')
-    __mod__ = _method_wrap('__mod__')
-    __mul__ = _method_wrap('__mul__')
-    __neg__ = _method_wrap('__neg__')
-    __or__ = _method_wrap('__or__')
-    __pos__ = _method_wrap('__pos__')
-    __pow__ = _method_wrap('__pow__')
-    __sub__ = _method_wrap('__sub__')
-    __xor__ = _method_wrap('__xor__')
-    __radd__ = _method_wrap('__add__')
-    __rand__ = _method_wrap('__and__')
-    __rfloordiv__ = _method_wrap('__floordiv__')
-    __rmul__ = _method_wrap('__mul__')
-    __ror__ = _method_wrap('__or__')
-    __rsub__ = _method_wrap('__rsub__')
-    __rxor__ = _method_wrap('__xor__')
-
-
 def indexwise_and(fuses, setting_values):
     """Given a list of fuse values, and a list of (index, value) pairs,
     return a list x such that x[index] = fuses[index] & value."""
@@ -57,13 +10,12 @@ def indexwise_and(fuses, setting_values):
 
 def swab_record(record):
     """Given a record from a hex file, return a new copy with adjacent data bytes swapped."""
-    result = []
-
+    result = bytearray()
     for x in range(0, len(record[1]), 2):
-        result += record[1][x + 1]
-        result += record[1][x]
+        result.append(record[1][x + 1])
+        result.append(record[1][x])
 
-    return record[0], ''.join(result)
+    return record[0], result
 
 
 def range_filter_records(records, lower_bound, upper_bound):
@@ -98,13 +50,10 @@ def range_filter_records(records, lower_bound, upper_bound):
 
 def merge_records(records, default_data, base_address=0):
     """Given a list of HEX file records and a data buffer with its own base address (default=0), merge the HEX file records into a new copy of the data buffer."""
-    result_list = []
-
+    result_list = bytearray()
     mark = 0
     for record in records:
-        if ((record[0] < base_address) or
-                ((record[0] + len(record[1])) > (base_address +
-                                                 len(default_data)))):
+        if (record[0] < base_address) or ((record[0] + len(record[1])) > (base_address + len(default_data))):
             raise IndexError('Record out of range.')
 
         point = (record[0] - base_address)
@@ -120,4 +69,4 @@ def merge_records(records, default_data, base_address=0):
         result_list += default_data[mark:]
 
     # String-join result_list and return.
-    return ''.join(result_list)
+    return result_list

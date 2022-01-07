@@ -1,119 +1,119 @@
 #!/usr/bin/python
-"""The picpro module provides a simple program-level and command-line-level interface to the PIC programmers made by kitsrus.com.
+"""Main entry-point into the 'pic_k150_programmer' CLI application.
 
-This module is released under the GPL by its author.
-This work would not have been possible without the programming protocol documentation kindly provided by kitsrus
-as well as the assistance of people at kitsrus.com and in the community.
-Send comments or bug reports related to this module to tetsujin@users.sf.net
+The picpro3 provides a simple program-level and command-line-level interface to the PIC programmers made by kitsrus.com. (K150 and compatible)
+
+License: GPL2
+Website: https://gitlab.salamek.cz/sadam/pic_k150_programmer.git
+
+Command details:
+    program             Program PIC chip.
+    verify              Verify PIC flash.
+
+Usage:
+    pic-k150-programmer program -p PORT -i HEX_FILE -t PIC_TYPE [--id=PIC_ID] [--fuse=FUSE_NAME:FUSE_VALUE...] [--icsp]
+    pic-k150-programmer verify -p PORT -i HEX_FILE -t PIC_TYPE [--icsp]
+    pic-k150-programmer (-h | --help)
+
+
+Options:
+    --icsp                           Enable ISCP programming.
+    --fuse=FUSE_NAME:FUSE_VALUE      Set fuse value directly.
+    --id=PIC_ID                      Set PIC id to be programmed in pic.
+    -p PORT --port=PORT              Set serial port where programmer is connected.
+    -t PIC_TYPE --pic_type=PIC_TYPE  Pic type you are programming/reading.
+    -i HEX_FILE --hex_file=HEX_FILE  Hex file to flash or to read.
 """
 
-# There should never be a problem with the standard imports.  But...
-try:
-    import getopt
-    import os.path
-    import re
-    import struct
-    import sys
-    import time
-except ImportError:
-    print("Failed to import standard Python libraries.  Please make sure your Python installation is complete and up-to-date.")
-    sys.exit(1)
-
-try:
-    import serial
-except ImportError:
-    print("Unable to find Python Serial library.  Please download and install the serial library from http://www.sf.net/projects/pyserial")
-    sys.exit(1)
-
+import os.path
+import struct
+import sys
+import signal
+import serial
+from functools import wraps
+from docopt import docopt
 from pic_k150_programmer.ChipInfoReader import ChipInfoReader
 from pic_k150_programmer.HexFileReader import HexFileReader
 from pic_k150_programmer.ProtocolInterface import ProtocolInterface
+from pic_k150_programmer.HexInt import HexInt
 from pic_k150_programmer.exceptions import FuseError, InvalidResponseError
-from pic_k150_programmer.tools import range_filter_records, swab_record, merge_records, hex_int
+from pic_k150_programmer.tools import range_filter_records, swab_record, merge_records
 
 module_location = os.path.dirname(os.path.realpath(__file__)) + os.sep
 
-
-def print_usage_and_abort():
-    print(handle_command_line.__doc__)
-    sys.exit(1)
+OPTIONS = docopt(__doc__)
 
 
-def handle_command_line(cmd_args):
-    # @TODO Rewrite this shit
-    """micropro: program a PIC using the Kits R Us serial/USB PIC programmer.
+def command(name: str = None):
+    """Decorator that registers the chosen command/function.
 
-Arguments:
-    "-p x" (or "--port=x"): use serial port x
-    "--pic_type=x": specify type of PIC to be programmed (use '16F84A',
-                  not 'PIC16F84A')
-    "-i file.hex" (or "--input=file.hex"): specify name of HEX file to use
-    "--fuse=fuse_name:value": (optional) specify a value for a programming flag
-    "--ID=PIC_id": (optional) specify ID to be programmed to PIC.
-    "--program": (default) Program the PIC
-    "--verify": Verify only, do not program
-    "-h" (or "--help"): display this message"""
+    If a function is decorated with @command but that function name is not a valid "command" according to the docstring,
+    a KeyError will be raised, since that's a bug in this script.
 
-    try:
-        opts, args = getopt.getopt(cmd_args[1:], 'p:i:h',
-                                   ['port=', 'pic_type=', 'input=',
-                                    'fuse=', 'ID=', 'help',
-                                    'icsp', 'program', 'verify'])
+    If a user doesn't specify a valid command in their command line arguments, the above docopt(__doc__) line will print
+    a short summary and call sys.exit() and stop up there.
 
-        if not args:
-            print_usage_and_abort()
+    If a user specifies a valid command, but for some reason the developer did not register it, an AttributeError will
+    raise, since it is a bug in this script.
 
-        handle_parsed_command_line(opts)
-    except getopt.GetoptError:
-        print_usage_and_abort()
+    Finally, if a user specifies a valid command and it is registered with @command below, then that command is "chosen"
+    by this decorator function, and set as the attribute `chosen`. It is then executed below in
+    `if __name__ == '__main__':`.
+
+    Positional arguments:
+    func -- the function to decorate
+    """
+
+    def function_wrap(func):
+
+        @wraps(func)
+        def wrapped():
+            return func()
+
+        command_name = name if name else func.__name__
+
+        # Register chosen function.
+        if command_name not in OPTIONS:
+            raise KeyError('Cannot register {}, not mentioned in docstring/docopt.'.format(command_name))
+        if OPTIONS[command_name]:
+            command.chosen = func
+
+        return wrapped
+
+    return function_wrap
 
 
-def handle_parsed_command_line(opts):
+@command()
+def program():
     fuses = {}
-    pic_id = None
-    port = None
-    pic_type = None
-    hex_file_name = None
-    program_flag = False
-    verify_flag = False
-    icsp_mode = False
+    for fuse_cmd in OPTIONS['--fuse']:
+        fuse_name, fuse_value = fuse_cmd.split(':')
+        fuses[fuse_name] = fuse_value
 
-    for (opt, value) in opts:
-        try:
-            if (opt == '-h') or (opt == '--help'):
-                print_usage_and_abort()
-            elif (opt == '-p') or (opt == '--port'):
-                port = value
-            elif (opt == '-i') or (opt == '--input'):
-                hex_file_name = value
-            elif opt == '--pic_type':
-                pic_type = value
-            elif opt == '--fuse':
-                split = value.split(':')
-                fuses[split[0]] = split[1]
-            elif opt == '--ID':
-                pic_id = value
-            elif opt == '--verify':
-                verify_flag = True
-            elif opt == '--program':
-                program_flag = True
-            elif opt == '--icsp':
-                icsp_mode = True
-            else:
-                print('Error: Unrecognized option "{}".'.format(opt))
-                sys.exit(1)
-        except SystemExit:
-            raise
-        except Exception:
-            print('Error: Invalid usage of option "{}".'.format(opt))
-            print_usage_and_abort()
-
-    program = (program_flag or not verify_flag)
-
-    program_pic(port, pic_type, hex_file_name, program, fuses=fuses, pic_id=pic_id, icsp_mode=icsp_mode)
+    program_pic(
+        OPTIONS['--port'],
+        OPTIONS['--pic_type'],
+        OPTIONS['--hex_file'],
+        True,
+        fuses=fuses,
+        pic_id=OPTIONS['--id'],
+        icsp_mode=OPTIONS['--icsp']
+    )
 
 
-def program_pic(port, pic_type, hex_file_name='', program=True, fuses=None, pic_id=None, icsp_mode=False):
+@command()
+def verify():
+
+    program_pic(
+        OPTIONS['--port'],
+        OPTIONS['--pic_type'],
+        OPTIONS['--hex_file'],
+        False,
+        icsp_mode=OPTIONS['--icsp']
+    )
+
+
+def program_pic(port, pic_type, hex_file_name='', is_program=True, fuses=None, pic_id=None, icsp_mode=False):
     """Given a serial port ID, PIC type, hex file name, and other optional
        data, attempt to program the hex file data to a PIC in the programmer."""
     try:
@@ -126,7 +126,8 @@ def program_pic(port, pic_type, hex_file_name='', program=True, fuses=None, pic_
         return False
 
     # Get chip info
-    chip_info_filename = module_location + 'chipinfo.cid'
+    #chip_info_filename = module_location + 'chipinfo.cid'
+    chip_info_filename = module_location + 'chipdata.cid'
     try:
         chip_info_reader = ChipInfoReader(chip_info_filename)
     except IOError:
@@ -148,7 +149,7 @@ def program_pic(port, pic_type, hex_file_name='', program=True, fuses=None, pic_
     rom_blank_bytes = struct.pack('>H', rom_blank_word)
     rom_blank = rom_blank_bytes * chip_info.vars['rom_size']
 
-    eeprom_blank_byte = '\xff'
+    eeprom_blank_byte = b'\xff'
     eeprom_blank = eeprom_blank_byte * chip_info.vars['eeprom_size']
 
     # Read hex file.
@@ -213,13 +214,14 @@ def program_pic(port, pic_type, hex_file_name='', program=True, fuses=None, pic_
     def _map_records(eeprom_record):
         return (
             (eeprom_word_base + ((eeprom_record[0] - eeprom_word_base) / 2)),
-            (''.join([eeprom_record[1][record_index] for record_index in range(pick_byte, len(eeprom_record[1]), 2)]))
+            (bytearray([eeprom_record[1][record_index] for record_index in range(pick_byte, len(eeprom_record[1]), 2)]))
         )
 
     eeprom_records = map(_map_records, eeprom_records)
 
     # FINALLY!  We create the byte-level data...
     rom_data = merge_records(rom_records, rom_blank)
+
     eeprom_data = merge_records(eeprom_records, eeprom_blank, 0x4200)
 
     # Extract fuse data, pic_id data, etc. from fuse records
@@ -228,15 +230,15 @@ def program_pic(port, pic_type, hex_file_name='', program=True, fuses=None, pic_
     else:
         id_data = merge_records(
             range_filter_records(config_records, 0x4000, 0x4008),
-            ('\x00' * 8))
+            (b'\x00' * 8))
         # If this is a 16-bit core, leave id_data as-is.  Else we need to
         # take every other byte according to endian-ness.
         if chip_info.get_core_bits() != 16:
-            id_data = ''.join([id_data[x] for x in range(pick_byte, 8, 2)])
+            id_data = bytearray([id_data[x] for x in range(pick_byte, 8, 2)])
 
     # Pull fuse data from config records
-    fuse_list = list(map(lambda word: struct.pack('>H', word).decode('ASCI'), chip_info.vars['FUSEblank']))  # @FIXME decode
-    fuse_data = ''.join(fuse_list)
+    fuse_data_list = list(map(lambda word: struct.pack('>H', word), chip_info.vars['FUSEblank']))
+    fuse_data = b''.join(fuse_data_list)
     fuse_data = merge_records(
         range_filter_records(
             config_records,
@@ -250,7 +252,7 @@ def program_pic(port, pic_type, hex_file_name='', program=True, fuses=None, pic_
     # Go through each fuse listed in chip info.
     # Determine its current setting in fuse_value, and accumulate a new
     # fuse_value by incorporating values specified in (fuses).
-    fuse_values = [hex_int(struct.unpack('>H', fuse_data[x:x + 2])[0]) for x in range(0, len(fuse_data), 2)]
+    fuse_values = [HexInt(struct.unpack('>H', fuse_data[x:x + 2])[0]) for x in range(0, len(fuse_data), 2)]
     # for i in xrange(0, len(fuse_blank)):
     # fuse_value[i] = struct.unpack('>H', fuse_data[i*2, i*2+2])
     if fuses:
@@ -269,12 +271,14 @@ def program_pic(port, pic_type, hex_file_name='', program=True, fuses=None, pic_
         prot_interface = ProtocolInterface(s)
 
         # Verify that communications are functioning
-        response = prot_interface.echo(hex_file_name)
-        if response != hex_file_name:
-            print('Invalid response received from PIC programmer.')
+        hex_file_name_encode = hex_file_name.encode('UTF-8')
+        response = prot_interface.echo(hex_file_name_encode)
+        if response != hex_file_name_encode:
+            print('Invalid response received from PIC programmer. ({} != {})'.format(response, hex_file_name_encode))
             print('Please check that device is properly connected and working.')
-    except InvalidResponseError:
-        print('Unable to initialize connection to programmer.')
+            return False
+    except InvalidResponseError as e:
+        print('Unable to initialize connection to programmer. {}'.format(e))
         print('Please check that device is properly connected and working.')
         return False
 
@@ -290,6 +294,8 @@ def program_pic(port, pic_type, hex_file_name='', program=True, fuses=None, pic_
 
     prot_interface.init_programming_vars(**programming_vars)
 
+    #print('Programmer version is: {}'.format(prot_interface.programmer_firmware_version()))
+
     try:
         # Instruct user to insert chip
         if not icsp_mode:
@@ -299,25 +305,45 @@ def program_pic(port, pic_type, hex_file_name='', program=True, fuses=None, pic_
         else:
             print('Accessing chip connected to ICSP port.')
 
+        """
+        chip_config = prot_interface.read_config()
+        print('Chip config: {}'.format(chip_config))
+
+        prot_interface._set_programming_voltages_command(True)
+        if not prot_interface.rom_is_blank(0x3F):
+            print('ROM is EMPTY')
+        else:
+            print('ROM IS NOT EMPTY')
+        prot_interface.cycle_programming_voltages()
+        prot_interface._set_programming_voltages_command(False)
+        """
+
         # If write mode is active, program the ROM, EEPROM, ID and fuses.
-        if program:
+        if is_program:
             # Write ROM, EEPROM, ID and fuses
+
             print('Erasing Chip')
             if not prot_interface.erase_chip():
                 print('Erasure failed.')
+                return False
+
+            prot_interface.cycle_programming_voltages()
 
             print('Programming ROM')
             if not prot_interface.program_rom(rom_data):
                 print('ROM programming failed.')
+                return False
 
             if chip_info.has_eeprom():
                 print('Programming EEPROM')
-            if not prot_interface.program_eeprom(eeprom_data):
-                print('EEPROM programming failed.')
+                if not prot_interface.program_eeprom(eeprom_data):
+                    print('EEPROM programming failed.')
+                    return False
 
             print('Programming ID and fuses')
             if not prot_interface.program_id_fuses(id_data, fuse_values):
                 print('Programming ID and fuses failed.')
+                return False
 
         # Verify programmed data.
         # Behold, my godlike powers of verification:
@@ -337,6 +363,7 @@ def program_pic(port, pic_type, hex_file_name='', program=True, fuses=None, pic_
             if pic_eeprom_data == eeprom_data:
                 print('EEPROM verified.')
             else:
+                print('{} {} ({})'.format(pic_eeprom_data, eeprom_data, len(eeprom_data)))
                 print('EEPROM verification failed.')
                 verification_result = False
 
@@ -344,14 +371,18 @@ def program_pic(port, pic_type, hex_file_name='', program=True, fuses=None, pic_
             print('Committing 18Fxxxx fuse data.')
             prot_interface.program_18fxxxx_fuse()
 
-    except InvalidResponseError:
-        print('Error: Communication failure.  This may be a bug in this script or a problem with your programmer hardware.')
+    except InvalidResponseError as e:
+        print('Error: Communication failure.  This may be a bug in this script or a problem with your programmer hardware. ({})'.format(e))
         return False
 
     return verification_result
 
 
-# Ugh, as much as I hate having to put this in at all, I despise
-# having to put it at the end...
+def main():
+    signal.signal(signal.SIGINT, lambda *_: sys.exit(0))  # Properly handle Control+C
+    getattr(command, 'chosen')()  # Execute the function specified by the user.
+
+
 if __name__ == '__main__':
-    handle_command_line(sys.argv)
+    main()
+
