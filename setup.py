@@ -48,6 +48,11 @@ setup(
     project_urls={
         'Release notes': 'https://github.com/Salamek/picpro/releases',
     },
+    entry_points={
+        'console_scripts': [
+            'picpro = picpro.__main__:main',
+        ],
+    },
     data_files=[
         (os.path.join(lib_dir, 'picpro'), [
             'lib/picpro/chipdata.cid'
