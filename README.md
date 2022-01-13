@@ -9,6 +9,9 @@ This is complete rewrite of kitsrus_pic_programmer into Python 3 + bunch of fixe
     * K149-A
     * K149-B
     * K150 (Tested)
+    
+See http://www.kitsrus.com/pic.html
+    
 
 ## Installation
 
