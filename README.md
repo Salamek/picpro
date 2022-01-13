@@ -2,6 +2,7 @@
 
 This is complete rewrite of kitsrus_pic_programmer into Python 3 + bunch of fixes and features.
 
+[![Tox tests](https://github.com/Salamek/picpro/actions/workflows/python-test.yml/badge.svg)](https://github.com/Salamek/picpro/actions/workflows/python-test.yml)
 
 ## Supported kitsrus programmers
     * K128
