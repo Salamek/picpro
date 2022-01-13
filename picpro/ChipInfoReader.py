@@ -136,5 +136,4 @@ class ChipInfoReader:
         chip_entry['program_tries'] = chip_entry.get('program_tries', 1)
         chip_entry['over_program'] = chip_entry.get('over_program', 0)
 
-        print(chip_entry)
         return ChipInfoEntry(**chip_entry)
