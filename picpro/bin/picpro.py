@@ -289,7 +289,7 @@ def prepare_flash_data_from_hex_file(chip_info: IChipInfoEntry, hex_file: HexFil
         )
 
     eeprom_records = [*map(_map_records, eeprom_records)]
-    print(eeprom_records)
+
     # FINALLY!  We create the byte-level data...
     rom_data = merge_records(rom_records, rom_blank)
 
