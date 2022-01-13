@@ -1,12 +1,12 @@
 import re
 import struct
 
-from pic_k150_programmer.exceptions import InvalidRecordError, InvalidChecksumError
+from picpro.exceptions import InvalidRecordError, InvalidChecksumError
 
 
 class HexFileReader:
     def __init__(self, file_name: str):
-        with open(file_name, 'r') as file:
+        with open(file_name, 'r', encoding='ascii') as file:
 
             ext_address = 0
             self.records = []
@@ -18,6 +18,8 @@ class HexFileReader:
                     if eof:
                         raise InvalidRecordError('extra record after EOF record.')
                     chop = hex_record_chopper.match(line)
+                    if not chop:
+                        raise InvalidRecordError('failed to parse line {}'.format(line))
                     length_str, address_str, type_str, data_str, checksum_str = chop.groups()
                     length = int(length_str, 16)
                     address = int(address_str, 16)
@@ -52,7 +54,7 @@ class HexFileReader:
                     raise InvalidRecordError('Record does not start with colon:  {}'.format(line))
 
     def merge(self, data_str: bytes) -> bytes:
-        data_list = list(data_str)
+        data_list = bytearray(data_str)
 
         for record in self.records:
             (address, data) = record
@@ -62,4 +64,4 @@ class HexFileReader:
 
             data_list[address:address + len(data)] = data
 
-        return b''.join(data_list)
+        return bytes(data_list)

@@ -1,0 +1,27 @@
+pkgname=picpro
+pkgver=0.0.1
+pkgdesc="picpro a kitsrus PIC CLI programmer"
+pkgrel=1
+arch=('any')
+license=('GPL-2.0')
+url='https://github.com/Salamek/picpro'
+makedepends=('python-setuptools')
+depends=(
+    'python'
+    'python-docopt',
+    'python-pyserial'
+)
+
+prepare() {
+  mkdir -p "${srcdir}/${pkgname}"
+  cp -R "${srcdir}/../../picpro" "${srcdir}/${pkgname}"
+  cp -R "${srcdir}/../../lib" "${srcdir}/${pkgname}"
+  cp -R "${srcdir}/../../tests" "${srcdir}/${pkgname}"
+  cp -R "${srcdir}/../../setup.py" "${srcdir}/${pkgname}"
+  cp -R "${srcdir}/../../README.md" "${srcdir}/${pkgname}"
+}
+
+package() {
+  cd "${srcdir}/${pkgname}"
+  python setup.py install --root="$pkgdir/" --optimize=1
+}

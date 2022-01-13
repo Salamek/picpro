@@ -1,7 +1,7 @@
 import re
-
-from pic_k150_programmer.ChipInfoEntry import ChipInfoEntry
-from pic_k150_programmer.exceptions import FormatError
+from typing import Union
+from picpro.ChipInfoEntry import ChipInfoEntry
+from picpro.exceptions import FormatError
 
 
 class ChipInfoReader:
@@ -44,11 +44,11 @@ class ChipInfoReader:
         def handle_int(xstr: str) -> int:
             return int(xstr, 10)
 
-        def handle_bool(xstr: str) -> bool:
-            return self.boolean_dict[xstr]
+        def handle_bool(xstr: str) -> Union[bool, None]:
+            return self.boolean_dict.get(xstr)
 
-        def handle_core_type(xstr: str) -> int:
-            return ChipInfoEntry.core_type_dict[xstr]
+        def handle_core_type(xstr: str) -> Union[int, None]:
+            return ChipInfoEntry.core_type_dict.get(xstr)
 
         special_handlers = {
             'band_gap': handle_bool,
@@ -59,7 +59,7 @@ class ChipInfoReader:
             'eeprom_size': handle_hex,
             'erase_mode': handle_int,
             'flash_chip': handle_bool,
-            'fuse_blank': (lambda xstr: map(lambda x: int(x, 16), xstr.split(' '))),
+            'fuse_blank': lambda xstr: map(lambda x: int(x, 16), xstr.split(' ')),
             'icsp_only': handle_bool,
             'over_program': handle_int,
             'program_delay': handle_int,
@@ -74,9 +74,8 @@ class ChipInfoReader:
         fuse_list_regexp = re.compile(r'^LIST\d+\s+FUSE(?P<fuse>\d)\s+"(?P<name>[^"]*)"\s*(?P<values>.*)$')
         non_blank_regexp = re.compile(r'.*\S.*$')
         self.chip_entries = {}
-        entry = None
         line_number = 0
-        with open(file_name, 'r') as file:
+        with open(file_name, 'r', encoding='UTF-8') as file:
             for line in file:
                 line_number += 1
                 match = assignment_regexp.match(line)
@@ -88,20 +87,22 @@ class ChipInfoReader:
                     # if lhs is 'chip_name', this is the start of a new section.
                     if lhs == 'chip_name':
                         chip_name = rhs.lower()
-                        self.chip_entries[chip_name] = entry
                         entry = {
                             'chip_name': chip_name
                         }
+                        self.chip_entries[chip_name] = entry
                     else:
                         # General case. CHIPname must be valid.
                         try:
-                            if lhs in special_handlers:
-                                entry[lhs] = special_handlers[lhs](rhs.lower())
+                            special_handler = special_handlers.get(lhs)
+                            if special_handler:
+                                resolved_value = special_handler(rhs.lower())
+                                entry[lhs] = resolved_value
                             else:
                                 entry[lhs] = rhs
-                        except NameError:
+                        except NameError as e:
                             # Some extraneous line in the file...  do we care?
-                            raise FormatError('Assignment outside of chip definition @{}: {}'.format(line_number, line))
+                            raise FormatError('Assignment outside of chip definition @{}: {}'.format(line_number, line)) from e
                 else:
                     match = fuse_list_regexp.match(line)
                     if match:
@@ -134,4 +135,6 @@ class ChipInfoReader:
         # These are ignored in new file format
         chip_entry['program_tries'] = chip_entry.get('program_tries', 1)
         chip_entry['over_program'] = chip_entry.get('over_program', 0)
+
+        print(chip_entry)
         return ChipInfoEntry(**chip_entry)

@@ -12,10 +12,10 @@ Command details:
     dump                Dump PIC data as binary.
 
 Usage:
-    pic-k150-programmer program -p PORT -i HEX_FILE -t PIC_TYPE [--id=PIC_ID] [--fuse=FUSE_NAME:FUSE_VALUE...] [--icsp]
-    pic-k150-programmer verify -p PORT -i HEX_FILE -t PIC_TYPE [--icsp]
-    pic-k150-programmer dump <mem_type> -p PORT -b BIN_FILE -t PIC_TYPE [--icsp]
-    pic-k150-programmer (-h | --help)
+    picpro program -p PORT -i HEX_FILE -t PIC_TYPE [--id=PIC_ID] [--fuse=FUSE_NAME:FUSE_VALUE...] [--icsp]
+    picpro verify -p PORT -i HEX_FILE -t PIC_TYPE [--icsp]
+    picpro dump <mem_type> -p PORT -b BIN_FILE -t PIC_TYPE [--icsp]
+    picpro (-h | --help)
 
 
 Options:
@@ -32,23 +32,24 @@ import os.path
 import struct
 import sys
 import signal
-import serial
 from functools import wraps
+from typing import Union, Optional, Callable
+import serial
 from docopt import docopt
-from typing import Union
-from pic_k150_programmer.ChipInfoReader import ChipInfoReader
-from pic_k150_programmer.IChipInfoEntry import IChipInfoEntry
-from pic_k150_programmer.HexFileReader import HexFileReader
-from pic_k150_programmer.ProtocolInterface import ProtocolInterface
-from pic_k150_programmer.exceptions import FuseError, InvalidResponseError
-from pic_k150_programmer.tools import range_filter_records, swab_record, merge_records
+from picpro.ChipInfoReader import ChipInfoReader
+from picpro.IChipInfoEntry import IChipInfoEntry
+from picpro.HexFileReader import HexFileReader
+from picpro.ProtocolInterface import ProtocolInterface
+from picpro.exceptions import FuseError, InvalidResponseError
+from picpro.tools import range_filter_records, swab_record, merge_records
+import picpro as app_root
 
-module_location = os.path.dirname(os.path.realpath(__file__)) + os.sep
+APP_ROOT_FOLDER = os.path.abspath(os.path.dirname(app_root.__file__))
 
 OPTIONS = docopt(__doc__)
 
 
-def command(name: str = None):
+def command(name: Optional[str] = None) -> Callable:
     """Decorator that registers the chosen command/function.
 
     If a function is decorated with @command but that function name is not a valid "command" according to the docstring,
@@ -68,10 +69,10 @@ def command(name: str = None):
     func -- the function to decorate
     """
 
-    def function_wrap(func):
+    def function_wrap(func: Callable) -> Callable:
 
         @wraps(func)
-        def wrapped():
+        def wrapped() -> Callable:
             return func()
 
         command_name = name if name else func.__name__
@@ -88,7 +89,7 @@ def command(name: str = None):
 
 
 @command()
-def program():
+def program() -> None:
     fuses = {}
     for fuse_cmd in OPTIONS['--fuse']:
         fuse_name, fuse_value = fuse_cmd.split(':')
@@ -106,7 +107,7 @@ def program():
 
 
 @command()
-def verify():
+def verify() -> None:
     program_pic(
         OPTIONS['--port'],
         OPTIONS['--pic_type'],
@@ -117,8 +118,8 @@ def verify():
 
 
 @command()
-def dump():
-    chip_info, protocol_interface = programmer_common_bootstrap(
+def dump() -> None:
+    _, protocol_interface = programmer_common_bootstrap(
         OPTIONS['--port'],
         OPTIONS['--pic_type'],
         icsp_mode=OPTIONS['--icsp']
@@ -137,6 +138,19 @@ def dump():
             file.write(protocol_interface.read_rom())
         else:
             raise ValueError('Unknown memory type')
+
+
+def find_chip_data() -> str:
+    chip_data_files = [f for f in [
+        os.path.join('/', 'lib', 'picpro', 'chipdata.cid'),
+        os.path.abspath(os.path.join(APP_ROOT_FOLDER, '..', 'lib', 'picpro', 'chipdata.cid')),
+        os.path.join(APP_ROOT_FOLDER, 'chipdata.cid'),
+    ] if os.path.exists(f)]
+
+    if len(chip_data_files) == 0:
+        raise ValueError('chipdata.cid was not found in any search path')
+
+    return chip_data_files[0]
 
 
 def programmer_common_bootstrap(port: str, pic_type: str, icsp_mode: bool) -> Union[None, tuple]:
@@ -160,7 +174,7 @@ def programmer_common_bootstrap(port: str, pic_type: str, icsp_mode: bool) -> Un
         hex_file_name_encode = b'Hello programmer!'
         response = protocol_interface.echo(hex_file_name_encode)
         if response != hex_file_name_encode:
-            print('Invalid response received from PIC programmer. ({} != {})'.format(response, hex_file_name_encode))
+            print('Invalid response received from PIC programmer. ({!r} != {!r})'.format(response, hex_file_name_encode))
             print('Please check that device is properly connected and working.')
             return None
     except InvalidResponseError as e:
@@ -169,7 +183,7 @@ def programmer_common_bootstrap(port: str, pic_type: str, icsp_mode: bool) -> Un
         return None
 
     # Get chip info
-    chip_info_filename = module_location + 'chipdata.cid'
+    chip_info_filename = find_chip_data()
     try:
         chip_info_reader = ChipInfoReader(chip_info_filename)
     except IOError:
@@ -199,9 +213,12 @@ def programmer_common_bootstrap(port: str, pic_type: str, icsp_mode: bool) -> Un
     return chip_info, protocol_interface
 
 
-def prepare_flash_data_from_hex_file(chip_info: IChipInfoEntry, hex_file: HexFileReader, pic_id: str = None, fuses: dict = None) -> tuple:
+def prepare_flash_data_from_hex_file(chip_info: IChipInfoEntry, hex_file: HexFileReader, pic_id: Optional[str] = None, fuses: Optional[dict] = None) -> tuple:
     # Generate blank ROM and EEPROM of appropriate size.
-    rom_blank_word = 0xffff << chip_info.get_core_bits()
+    core_bits = chip_info.get_core_bits()
+    if not core_bits:
+        raise ValueError('Failed to detect core bits')
+    rom_blank_word = 0xffff << core_bits
     rom_blank_word = (~rom_blank_word & 0xffff)
     rom_blank_bytes = struct.pack('>H', rom_blank_word)
     rom_blank = rom_blank_bytes * chip_info.programming_vars.rom_size
@@ -240,10 +257,10 @@ def prepare_flash_data_from_hex_file(chip_info: IChipInfoEntry, hex_file: HexFil
                 if be_ok and not le_ok:
                     swap_bytes = False
                     break
-                elif le_ok and not be_ok:
+                if le_ok and not be_ok:
                     swap_bytes = True
                     break
-                elif not (le_ok or be_ok):
+                if not (le_ok or be_ok):
                     raise ValueError('Invalid ROM word: {}, ROMblank: {}'.format(hex(le_word), hex(rom_blank_word)))
         if swap_bytes is not None:
             break
@@ -312,7 +329,15 @@ def prepare_flash_data_from_hex_file(chip_info: IChipInfoEntry, hex_file: HexFil
     return rom_data, eeprom_data, id_data, fuse_values
 
 
-def program_pic(port: str, pic_type: str, hex_file_name: str, is_program: bool = True, fuses: dict = None, pic_id: str = None, icsp_mode: bool = False):
+def program_pic(
+        port: str,
+        pic_type: str,
+        hex_file_name: str,
+        is_program: bool = True,
+        fuses: Optional[dict] = None,
+        pic_id: Optional[str] = None,
+        icsp_mode: bool = False
+) -> bool:
     """Given a serial port ID, PIC type, hex file name, and other optional
        data, attempt to program the hex file data to a PIC in the programmer."""
 
@@ -338,19 +363,6 @@ def program_pic(port: str, pic_type: str, hex_file_name: str, is_program: bool =
         return False
 
     try:
-        """
-        chip_config = prot_interface.read_config()
-        print('Chip config: {}'.format(chip_config))
-
-        prot_interface._set_programming_voltages_command(True)
-        if not prot_interface.rom_is_blank(0x3F):
-            print('ROM is EMPTY')
-        else:
-            print('ROM IS NOT EMPTY')
-        prot_interface.cycle_programming_voltages()
-        prot_interface._set_programming_voltages_command(False)
-        """
-
         # If write mode is active, program the ROM, EEPROM, ID and fuses.
         if is_program:
             # Write ROM, EEPROM, ID and fuses
@@ -411,11 +423,10 @@ def program_pic(port: str, pic_type: str, hex_file_name: str, is_program: bool =
     return verification_result
 
 
-def main():
+def main() -> None:
     signal.signal(signal.SIGINT, lambda *_: sys.exit(0))  # Properly handle Control+C
     getattr(command, 'chosen')()  # Execute the function specified by the user.
 
 
 if __name__ == '__main__':
     main()
-

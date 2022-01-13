@@ -1,0 +1,104 @@
+stages:
+  - test
+  - package
+  - packagetest
+  - deploy
+
+test:debian:
+  stage: test
+  script:
+    - apt-get update -qy
+    - apt-get install -y python3-setuptools python3-pytest-runner python3-pytest python3-pylint-common python3-pytest-cov python3-serial python3-docopt tox
+    - tox -e py39
+  tags:
+    - debian
+
+test:archlinux:
+  stage: test
+  script:
+    - pacman -Sy python-pytest-runner python-pytest python-pylint python-pytest-cov python-pyserial python-docopt python-tox  --noconfirm
+    - tox -e py310
+  tags:
+    - archlinux
+
+package:debian:
+  stage: package
+  script:
+    - apt-get update -qy
+    - apt-get install -y python-all python3-pytest-runner python3-stdeb python3-pytest python3-pylint-common python3-pytest-cov python3-serial python3-requests tox dh-python python3-docopt
+    - rm -rf "./deb_dist"
+    - python3 setup.py --command-packages=stdeb.command bdist_deb
+  tags:
+    - debian
+
+  artifacts:
+    paths:
+      - deb_dist/*.deb
+    expire_in: 1d
+
+package:archlinux:
+  stage: package
+  script:
+    - pacman -Sy python-pip sudo openssh binutils fakeroot python-pyserial python-docopt --noconfirm
+    - useradd -m -G users -s /bin/bash package
+    - chown -R package:users archlinux
+    - cd archlinux
+    - sudo -H -u package makepkg -f
+  tags:
+    - archlinux
+
+  artifacts:
+    paths:
+      - archlinux/picpro*
+    expire_in: 1d
+
+packagetest:debian:
+  stage: packagetest
+  script:
+    - apt-get update -qy
+    - cd deb_dist
+    - apt install ./*.deb -qy
+  tags:
+    - debian
+  dependencies:
+    - package:debian
+
+packagetest:archlinux:
+  stage: packagetest
+  script:
+    - pacman -Sy --noconfirm
+    - cd archlinux
+    - pacman -U picpro*.pkg.tar.zst --noconfirm
+  tags:
+    - archlinux
+  dependencies:
+    - package:archlinux
+
+repoupdate:
+  stage: deploy
+  variables:
+    TWINE_USERNAME: Salamek
+  before_script:
+    - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
+    - apt-get update -y
+    - apt-get install twine python-setuptools -y
+    - eval $(ssh-agent -s)
+    - ssh-add <(echo "$SSH_PRIVATE_KEY")
+    - mkdir -p ~/.ssh
+    - '[[ -f /.dockerenv ]] && echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config'
+  script:
+    - ssh www-data@repository 'rm -rf /var/www/repository.salamek.cz/www/arch/pub/any/picpro*.pkg.tar.zst'
+    - ssh www-data@repository 'rm -rf /var/www/repository.salamek.cz/cache/deb/pub/all/picpro*.deb'
+    - scp archlinux/picpro*.pkg.tar.zst www-data@repository:/var/www/repository.salamek.cz/www/arch/pub/any
+    - scp deb_dist/*.deb www-data@repository:/var/www/repository.salamek.cz/cache/deb/pub/all
+    - ssh www-data@repository '/var/www/repository.salamek.cz/deb-pub-update.sh'
+    - ssh www-data@repository '/var/www/repository.salamek.cz/arch-pub-update.sh'
+    - python3 setup.py sdist
+    - twine upload dist/*
+  dependencies:
+    - package:archlinux
+    - package:debian
+  tags:
+    - debian
+  only:
+    - tags

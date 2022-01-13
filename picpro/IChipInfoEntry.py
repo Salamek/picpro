@@ -1,5 +1,5 @@
 from typing import Union
-from pic_k150_programmer.ProgrammingVars import ProgrammingVars
+from picpro.ProgrammingVars import ProgrammingVars
 
 
 class IChipInfoEntry:

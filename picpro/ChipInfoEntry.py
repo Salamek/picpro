@@ -1,8 +1,8 @@
 from typing import Union
-from pic_k150_programmer.IChipInfoEntry import IChipInfoEntry
-from pic_k150_programmer.ProgrammingVars import ProgrammingVars
-from pic_k150_programmer.exceptions import FuseError
-from pic_k150_programmer.tools import indexwise_and
+from picpro.IChipInfoEntry import IChipInfoEntry
+from picpro.ProgrammingVars import ProgrammingVars
+from picpro.exceptions import FuseError
+from picpro.tools import indexwise_and
 
 
 class ChipInfoEntry(IChipInfoEntry):
@@ -60,66 +60,63 @@ class ChipInfoEntry(IChipInfoEntry):
                  fuse_blank: list, cp_warn: bool, cal_word: bool, band_gap: bool, icsp_only: bool,
                  chip_id: int, fuses: dict):
 
-        self.vars = {
-            'chip_name': chip_name,
-            'include': include,
-            'socket_image': socket_image,
-            'erase_mode': erase_mode,
-            'FlashChip': flash_chip,
-            'power_sequence': self.power_sequence_dict[power_sequence],
-            'power_sequence_str': power_sequence,
-            'program_delay': program_delay,
-            'program_tries': program_tries,
-            'over_program': over_program,
-            'core_type': core_type,
-            'rom_size': rom_size,
-            'eeprom_size': eeprom_size,
-            'fuse_blank': fuse_blank,
-            'cp_warn': cp_warn,
-            'flag_calibration_value_in_rom': cal_word,
-            'flag_band_gap_fuse': band_gap,
-            'icsp_only': icsp_only,
-            'chip_id': chip_id,
-            'fuses': fuses
-        }
+        self.chip_name = chip_name
+        self.include = include
+        self.socket_image = socket_image
+        self.erase_mode = erase_mode
+        self.flash_chip = flash_chip
+        self.power_sequence = power_sequence
+        self.program_delay = program_delay
+        self.program_tries = program_tries
+        self.over_program = over_program
+        self.core_type = core_type
+        self.rom_size = rom_size
+        self.eeprom_size = eeprom_size
+        self.fuse_blank = fuse_blank
+        self.cp_warn = cp_warn
+        self.cal_word = cal_word
+        self.band_gap = band_gap
+        self.icsp_only = icsp_only
+        self.chip_id = chip_id
+        self.fuses = fuses
 
     @property
     def programming_vars(self) -> ProgrammingVars:
         """Returns a ProgrammingVars"""
         return ProgrammingVars(
-            rom_size=self.vars['rom_size'],
-            eeprom_size=self.vars['eeprom_size'],
-            core_type=self.vars['core_type'],
-            flag_calibration_value_in_rom=self.vars['flag_calibration_value_in_rom'],
-            flag_band_gap_fuse=self.vars['flag_band_gap_fuse'],
+            rom_size=self.rom_size,
+            eeprom_size=self.eeprom_size,
+            core_type=self.core_type,
+            flag_calibration_value_in_rom=self.cal_word,
+            flag_band_gap_fuse=self.band_gap,
             # T.Nixon says this is the rule for this flag.
-            flag_18f_single_panel_access_mode=(self.vars['core_type'] == self.core_type_dict['bit16_a']),
-            flag_vcc_vpp_delay=self.vcc_vpp_delay_dict[self.vars['power_sequence_str']],
-            program_delay=self.vars['program_delay'],
-            power_sequence=self.vars['power_sequence'],
-            erase_mode=self.vars['erase_mode'],
-            program_retries=self.vars['program_tries'],
-            over_program=self.vars['over_program'],
-            fuse_blank=self.vars['fuse_blank'],
+            flag_18f_single_panel_access_mode=self.core_type == self.core_type_dict['bit16_a'],
+            flag_vcc_vpp_delay=self.vcc_vpp_delay_dict[self.power_sequence],
+            program_delay=self.program_delay,
+            power_sequence=self.power_sequence_dict[self.power_sequence],
+            erase_mode=self.erase_mode,
+            program_retries=self.program_tries,
+            over_program=self.over_program,
+            fuse_blank=self.fuse_blank,
         )
 
     def get_core_bits(self) -> Union[int, None]:
-        core_type = self.vars['core_type']
+        core_type = self.core_type
 
         if core_type in [1, 2]:
             return 16
-        elif core_type in [3, 5, 6, 7, 8, 9, 10]:
+        if core_type in [3, 5, 6, 7, 8, 9, 10]:
             return 14
-        elif core_type in [4]:
+        if core_type in [4]:
             return 12
-        else:
-            return None
+
+        return None
 
     def decode_fuse_data(self, fuse_values: list) -> dict:
         """Given a list of fuse values, return a dict of symbolic
         (fuse : value) mapping representing the fuses that are set."""
 
-        fuse_param_list = self.vars['fuses']
+        fuse_param_list = self.fuses
         result = {}
 
         for fuse_param in fuse_param_list:
@@ -151,8 +148,8 @@ class ChipInfoEntry(IChipInfoEntry):
         return result
 
     def encode_fuse_data(self, fuse_dict: dict) -> list:
-        result = list(self.vars['fuse_blank'])
-        fuse_param_list = self.vars['fuses']
+        result = list(self.fuse_blank)
+        fuse_param_list = self.fuses
         for fuse in fuse_dict:
             fuse_value = fuse_dict[fuse]
 
@@ -168,14 +165,14 @@ class ChipInfoEntry(IChipInfoEntry):
         return result
 
     def has_eeprom(self) -> bool:
-        return self.vars['eeprom_size'] != 0
+        return self.eeprom_size != 0
 
     def pin1_location_text(self) -> str:
-        return self.socket_image_dict[self.vars['socket_image']]
+        return self.socket_image_dict[self.socket_image]
 
     def fuse_doc(self) -> str:
         result = ''
-        fuse_param_list = self.vars['fuses']
+        fuse_param_list = self.fuses
         for fuse in fuse_param_list:
             fuse_settings = fuse_param_list[fuse]
 
