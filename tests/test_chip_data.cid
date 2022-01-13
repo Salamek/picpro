@@ -1,0 +1,50 @@
+CHIPname=10F200
+INCLUDE=Y
+KITSRUS.COM=0pin
+EraseMode=6
+FlashChip=Y
+PowerSequence=VccVpp1
+ProgramDelay=20
+ProgramFlag2=1
+PanelSizing=0
+CoreType=NewF12B
+ROMsize=000100
+EEPROMsize=00000000
+FUSEblank=0FFF
+CPwarn=N
+CALword=Y
+BandGap=N
+ICSPonly=Y
+ChipID=FFFF
+LIST1 FUSE1 "WDT" "Enabled"=3FFF "Disabled"=3FFB
+LIST2 FUSE1 "Code Protect" "Disabled"=3FFF "Enabled"=3FF7
+LIST3 FUSE1 "MCLRE" "Enabled"=3FFF "Disabled"=3FEF
+
+CHIPname=16F737
+INCLUDE=Y
+KITSRUS.COM=28Npin
+EraseMode=3
+FlashChip=Y
+PowerSequence=VccFastVpp1
+ProgramDelay=10
+ProgramFlag2=1
+PanelSizing=0
+CoreType=bit14_C
+ROMsize=001000
+EEPROMsize=00000000
+FUSEblank=3FFF 3FFF
+CPwarn=N
+CALword=N
+BandGap=N
+ICSPonly=N
+ChipID=0BA0
+LIST1 FUSE1 "WDT" "Enabled"=3FFF "Disabled"=3FFB
+LIST2 FUSE1 "PWRTE" "Disabled"=3FFF "Enabled"=3FF7
+LIST3 FUSE1 "MCLRE" "Enabled"=3FFF "Disabled"=3FDF
+LIST4 FUSE1 "BOREN" "Enabled"=3FFF&3FFF "Sleep OFF"=3FFF&3FBF "SBOREN"=3FBF&3FFF "Disabled"=3FBF&3FBF
+LIST5 FUSE1 "Brownout Voltage" "2.0V"=3FFF "2.7V"=3F7F "4.2V"=3EFF "4.5V"=3E7F
+LIST6 FUSE1 "CCP2 Mux" "RC1"=3FFF "RB3"=2FFF
+LIST7 FUSE1 "Code Protect" "Disabled"=3FFF "Enabled"=1FFF
+LIST8 FUSE1 "Oscillator" "EXTRC_CLKOUT"=3FFF "EXTRC_IO"=3FFE "INTRC_CLKOUT"=3FFD "INTRC_IO"=3FFC "EXTCLK"=3FEF "HS"=3FEE "XT"=3FED "LP"=3FEC
+LIST9 FUSE2 "Clock Monitor" "Enabled"=3FFF "Disabled"=3FFE
+LIST10 FUSE2 "Int/Ext Switch" "Enabled"=3FFF "Disabled"=3FFD
