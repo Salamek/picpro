@@ -33,7 +33,7 @@ import struct
 import sys
 import signal
 from functools import wraps
-from typing import Union, Optional, Callable
+from typing import Union, Optional, Callable, Tuple
 import serial
 from docopt import docopt
 from picpro.ChipInfoReader import ChipInfoReader
@@ -81,7 +81,7 @@ def command(name: Optional[str] = None) -> Callable:
         if command_name not in OPTIONS:
             raise KeyError('Cannot register {}, not mentioned in docstring/docopt.'.format(command_name))
         if OPTIONS[command_name]:
-            command.chosen = func
+            command.chosen = func  # type: ignore
 
         return wrapped
 
@@ -119,11 +119,16 @@ def verify() -> None:
 
 @command()
 def dump() -> None:
-    _, protocol_interface = programmer_common_bootstrap(
+    programmer_common_data = programmer_common_bootstrap(
         OPTIONS['--port'],
         OPTIONS['--pic_type'],
         icsp_mode=OPTIONS['--icsp']
     )
+
+    if not programmer_common_data:
+        return
+
+    _, protocol_interface = programmer_common_data
 
     mem_type = OPTIONS['<mem_type>']
     output_file = OPTIONS['--bin_file']
@@ -265,8 +270,8 @@ def prepare_flash_data_from_hex_file(chip_info: IChipInfoEntry, hex_file: HexFil
         if swap_bytes is not None:
             break
     if swap_bytes:
-        rom_records = map(swab_record, rom_records)
-        config_records = map(swab_record, config_records)
+        rom_records = [*map(swab_record, rom_records)]
+        config_records = [*map(swab_record, config_records)]
 
     # EEPROM is stored in the hex file with one byte per word, so we
     # need to pick one of the two bytes out of each word to program.
@@ -277,14 +282,14 @@ def prepare_flash_data_from_hex_file(chip_info: IChipInfoEntry, hex_file: HexFil
     else:
         pick_byte = 1
 
-    def _map_records(eeprom_record):
+    def _map_records(eeprom_record: Tuple[int, bytearray]) -> Tuple[int, bytearray]:
         return (
-            (eeprom_word_base + ((eeprom_record[0] - eeprom_word_base) / 2)),
+            int(eeprom_word_base + ((eeprom_record[0] - eeprom_word_base) / 2)),
             (bytearray([eeprom_record[1][record_index] for record_index in range(pick_byte, len(eeprom_record[1]), 2)]))
         )
 
-    eeprom_records = map(_map_records, eeprom_records)
-
+    eeprom_records = [*map(_map_records, eeprom_records)]
+    print(eeprom_records)
     # FINALLY!  We create the byte-level data...
     rom_data = merge_records(rom_records, rom_blank)
 
@@ -292,11 +297,12 @@ def prepare_flash_data_from_hex_file(chip_info: IChipInfoEntry, hex_file: HexFil
 
     # Extract fuse data, pic_id data, etc. from fuse records
     if pic_id is not None:
-        id_data = pic_id
+        id_data = pic_id.encode('UTF-8')
     else:
         id_data = merge_records(
             range_filter_records(config_records, 0x4000, 0x4008),
-            (b'\x00' * 8))
+            (b'\x00' * 8)
+        )
         # If this is a 16-bit core, leave id_data as-is.  Else we need to
         # take every other byte according to endian-ness.
         if chip_info.get_core_bits() != 16:
