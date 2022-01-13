@@ -8,7 +8,7 @@ url='https://github.com/Salamek/picpro'
 makedepends=('python-setuptools')
 depends=(
     'python'
-    'python-docopt',
+    'python-docopt'
     'python-pyserial'
 )
 
