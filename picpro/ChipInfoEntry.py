@@ -80,6 +80,29 @@ class ChipInfoEntry(IChipInfoEntry):
         self.chip_id = chip_id
         self.fuses = fuses
 
+    def to_dict(self) -> dict:
+        return {
+            'chip_name': self.chip_name,
+            'include': self.include,
+            'socket_image': self.socket_image,
+            'erase_mode': self.erase_mode,
+            'flash_chip': self.flash_chip,
+            'power_sequence': self.power_sequence,
+            'program_delay': self.program_delay,
+            'program_tries': self.program_tries,
+            'over_program': self.over_program,
+            'core_type': self.core_type,
+            'rom_size': self.rom_size,
+            'eeprom_size': self.eeprom_size,
+            'fuse_blank': self.fuse_blank,
+            'cp_warn': self.cp_warn,
+            'cal_word': self.cal_word,
+            'band_gap': self.band_gap,
+            'icsp_only': self.icsp_only,
+            'chip_id': self.chip_id,
+            'fuses': self.fuses
+        }
+
     @property
     def programming_vars(self) -> ProgrammingVars:
         """Returns a ProgrammingVars"""

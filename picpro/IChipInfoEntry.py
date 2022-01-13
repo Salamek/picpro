@@ -30,3 +30,6 @@ class IChipInfoEntry:
 
     def fuse_doc(self) -> str:
         raise NotImplementedError
+
+    def to_dict(self) -> dict:
+        raise NotImplementedError
