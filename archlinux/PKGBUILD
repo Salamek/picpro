@@ -1,5 +1,5 @@
 pkgname=picpro
-pkgver=0.0.4
+pkgver=0.0.5
 pkgdesc="picpro a kitsrus PIC CLI programmer"
 pkgrel=1
 arch=('any')
