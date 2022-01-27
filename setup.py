@@ -1,7 +1,7 @@
 import os
 from setuptools import setup, find_packages
 
-lib_dir = os.getenv("LIBDIR", "/usr/lib")
+data_root_dir = os.getenv("DATAROOTDIR", "/usr/local/share")
 
 
 def read_readme() -> str:
@@ -54,7 +54,7 @@ setup(
         ],
     },
     data_files=[
-        (os.path.join(lib_dir, 'picpro'), [
+        (os.path.join(data_root_dir, 'picpro'), [
             'lib/picpro/chipdata.cid'
         ])
     ]

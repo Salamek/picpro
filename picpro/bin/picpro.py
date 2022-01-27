@@ -147,8 +147,10 @@ def dump() -> None:
 
 def find_chip_data() -> str:
     chip_data_files = [f for f in [
-        os.path.join('/', 'lib', 'picpro', 'chipdata.cid'),
-        os.path.abspath(os.path.join(APP_ROOT_FOLDER, '..', 'lib', 'picpro', 'chipdata.cid')),
+        os.path.join('/', 'usr', 'local', 'share', 'picpro', 'chipdata.cid'),
+        os.path.abspath(os.path.join(APP_ROOT_FOLDER, '..', 'usr', 'local', 'share', 'picpro', 'chipdata.cid')),
+        os.path.abspath(os.path.join(APP_ROOT_FOLDER, '..', 'usr', 'lib', 'picpro', 'chipdata.cid')),  # Legacy search path
+        os.path.abspath(os.path.join(APP_ROOT_FOLDER, '..', 'lib', 'picpro', 'chipdata.cid')),  # Legacy search path
         os.path.join(APP_ROOT_FOLDER, 'chipdata.cid'),
     ] if os.path.exists(f)]
 
