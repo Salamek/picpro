@@ -55,7 +55,7 @@ setup(
     },
     data_files=[
         (os.path.join(data_root_dir, 'picpro'), [
-            'lib/picpro/chipdata.cid'
+            'usr/local/share/picpro/chipdata.cid'
         ])
     ]
 )
