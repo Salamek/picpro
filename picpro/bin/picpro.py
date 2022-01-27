@@ -10,11 +10,13 @@ Command details:
     program             Program PIC chip.
     verify              Verify PIC flash.
     dump                Dump PIC data as binary.
+    chipinfo            Prints chipinfo as JSON in terminal.
 
 Usage:
     picpro program -p PORT -i HEX_FILE -t PIC_TYPE [--id=PIC_ID] [--fuse=FUSE_NAME:FUSE_VALUE...] [--icsp]
     picpro verify -p PORT -i HEX_FILE -t PIC_TYPE [--icsp]
     picpro dump <mem_type> -p PORT -b BIN_FILE -t PIC_TYPE [--icsp]
+    picpro chipinfo [<PIC_TYPE>]
     picpro (-h | --help)
 
 
@@ -32,6 +34,7 @@ import os.path
 import struct
 import sys
 import signal
+import json
 from functools import wraps
 from typing import Union, Optional, Callable, Tuple
 import serial
@@ -143,6 +146,21 @@ def dump() -> None:
             file.write(protocol_interface.read_rom())
         else:
             raise ValueError('Unknown memory type')
+
+
+@command()
+def chipinfo() -> None:
+    pic_type = OPTIONS['<PIC_TYPE>']
+    # Get chip info
+    chip_info_filename = find_chip_data()
+    chip_info_reader = ChipInfoReader(chip_info_filename)
+
+    if pic_type:
+        data = chip_info_reader.get_chip(pic_type).to_dict()
+    else:
+        data = {chip_name: entry.to_dict() for chip_name, entry in chip_info_reader.chip_entries.items()}
+
+    print(json.dumps(data))
 
 
 def find_chip_data() -> str:
