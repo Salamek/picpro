@@ -58,6 +58,7 @@ packagetest:debian:
     - apt-get update -qy
     - cd deb_dist
     - apt install ./*.deb -qy
+    - picpro chipinfo 12f675
   tags:
     - debian
   dependencies:
@@ -69,6 +70,7 @@ packagetest:archlinux:
     - pacman -Sy --noconfirm
     - cd archlinux
     - pacman -U picpro*.pkg.tar.zst --noconfirm
+    - picpro chipinfo 12f675
   tags:
     - archlinux
   dependencies:
