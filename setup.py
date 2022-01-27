@@ -1,7 +1,7 @@
 import os
 from setuptools import setup, find_packages
 
-data_root_dir = os.getenv("DATAROOTDIR", "/usr/local/share")
+share_dir = os.getenv("SHAREDIR", "/usr/share")
 
 
 def read_readme() -> str:
@@ -54,8 +54,8 @@ setup(
         ],
     },
     data_files=[
-        (os.path.join(data_root_dir, 'picpro'), [
-            'usr/local/share/picpro/chipdata.cid'
+        (os.path.join(share_dir, 'picpro'), [
+            'usr/share/picpro/chipdata.cid'
         ])
     ]
 )

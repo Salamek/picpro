@@ -165,8 +165,8 @@ def chipinfo() -> None:
 
 def find_chip_data() -> str:
     chip_data_files = [f for f in [
-        os.path.join('/', 'usr', 'local', 'share', 'picpro', 'chipdata.cid'),
-        os.path.abspath(os.path.join(APP_ROOT_FOLDER, '..', 'usr', 'local', 'share', 'picpro', 'chipdata.cid')),
+        os.path.join('/', 'usr', 'share', 'picpro', 'chipdata.cid'),
+        os.path.abspath(os.path.join(APP_ROOT_FOLDER, '..', 'usr', 'share', 'picpro', 'chipdata.cid')),
         os.path.abspath(os.path.join(APP_ROOT_FOLDER, '..', 'usr', 'lib', 'picpro', 'chipdata.cid')),  # Legacy search path
         os.path.abspath(os.path.join(APP_ROOT_FOLDER, '..', 'lib', 'picpro', 'chipdata.cid')),  # Legacy search path
         os.path.join(APP_ROOT_FOLDER, 'chipdata.cid'),
