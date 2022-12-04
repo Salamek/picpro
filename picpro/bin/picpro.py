@@ -15,7 +15,7 @@ Command details:
 Usage:
     picpro program -p PORT -i HEX_FILE -t PIC_TYPE [--id=PIC_ID] [--fuse=FUSE_NAME:FUSE_VALUE...] [--icsp]
     picpro verify -p PORT -i HEX_FILE -t PIC_TYPE [--icsp]
-    picpro dump <mem_type> -p PORT -b BIN_FILE -t PIC_TYPE [--icsp]
+    picpro dump <mem_type> -p PORT -o HEX_FILE -t PIC_TYPE [--icsp]
     picpro chipinfo [<PIC_TYPE>]
     picpro (-h | --help)
 
@@ -27,7 +27,7 @@ Options:
     -p PORT --port=PORT              Set serial port where programmer is connected.
     -t PIC_TYPE --pic_type=PIC_TYPE  Pic type you are programming/reading.
     -i HEX_FILE --hex_file=HEX_FILE  Hex file to flash or to read.
-    -b BIN_FILE --bin_file=BIN_FILE  Bin file path.
+    -o HEX_FILE --hex_file=HEX_FILE  Hex file to write.
 """
 
 import os.path
@@ -38,13 +38,14 @@ import json
 from functools import wraps
 from typing import Union, Optional, Callable, Tuple
 import serial
+from intelhex import IntelHex
 from docopt import docopt
 from picpro.ChipInfoReader import ChipInfoReader
 from picpro.IChipInfoEntry import IChipInfoEntry
 from picpro.HexFileReader import HexFileReader
 from picpro.ProtocolInterface import ProtocolInterface
 from picpro.exceptions import FuseError, InvalidResponseError
-from picpro.tools import range_filter_records, swab_record, merge_records
+from picpro.tools import range_filter_records, swab_record, merge_records, swab_bytes
 import picpro as app_root
 
 APP_ROOT_FOLDER = os.path.abspath(os.path.dirname(app_root.__file__))
@@ -134,18 +135,22 @@ def dump() -> None:
     _, protocol_interface = programmer_common_data
 
     mem_type = OPTIONS['<mem_type>']
-    output_file = OPTIONS['--bin_file']
+    output_file = OPTIONS['--hex_file']
 
-    with open(output_file, 'wb') as file:
+    if mem_type == 'eeprom':
+        print('Reading EEPROM into file {}...'.format(output_file))
+        content = swab_bytes(protocol_interface.read_eeprom())
+    elif mem_type == 'rom':
+        print('Reading ROM into file {}...'.format(output_file))
+        content = swab_bytes(protocol_interface.read_rom())
+    else:
+        raise ValueError('Unknown memory type')
 
-        if mem_type == 'eeprom':
-            print('Reading EEPROM into file {}...'.format(output_file))
-            file.write(protocol_interface.read_eeprom())
-        elif mem_type == 'rom':
-            print('Reading ROM into file {}...'.format(output_file))
-            file.write(protocol_interface.read_rom())
-        else:
-            raise ValueError('Unknown memory type')
+    intel_hex = IntelHex()
+    intel_hex.frombytes(content)
+
+    with open(output_file, 'w') as file:
+        intel_hex.write_hex_file(file)
 
 
 @command()
@@ -286,7 +291,7 @@ def prepare_flash_data_from_hex_file(chip_info: IChipInfoEntry, hex_file: HexFil
                     swap_bytes = True
                     break
                 if not (le_ok or be_ok):
-                    raise ValueError('Invalid ROM word: {}, ROMblank: {}'.format(hex(le_word), hex(rom_blank_word)))
+                    raise ValueError('Invalid ROM word: {}, ROM blank: {}'.format(hex(le_word), hex(rom_blank_word)))
         if swap_bytes is not None:
             break
     if swap_bytes:
@@ -319,13 +324,11 @@ def prepare_flash_data_from_hex_file(chip_info: IChipInfoEntry, hex_file: HexFil
     if pic_id is not None:
         id_data = pic_id.encode('UTF-8')
     else:
-        id_data = merge_records(
-            range_filter_records(config_records, 0x4000, 0x4008),
-            (b'\x00' * 8)
-        )
+        id_data_raw = range_filter_records(config_records, 0x4000, 0x4008)
+        id_data = merge_records(id_data_raw, (b'\x00' * 8), 0x4000)
         # If this is a 16-bit core, leave id_data as-is.  Else we need to
         # take every other byte according to endian-ness.
-        if chip_info.get_core_bits() != 16:
+        if core_bits != 16:
             id_data = bytearray([id_data[x] for x in range(pick_byte, 8, 2)])
 
     # Pull fuse data from config records

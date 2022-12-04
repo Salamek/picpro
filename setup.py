@@ -16,7 +16,8 @@ setup(
     package_data={'picpro': ['py.typed']},
     install_requires=[
         'pyserial',
-        'docopt'
+        'docopt',
+        'intelhex'
     ],
     tests_require=[
         'tox'

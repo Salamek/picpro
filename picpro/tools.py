@@ -11,14 +11,23 @@ def indexwise_and(fuses: list, setting_values: list) -> list:
     return result
 
 
+def swab_bytes(to_swab: bytes) -> bytearray:
+    result = bytearray()
+    for x in range(0, len(to_swab), 2):
+        result.append(to_swab[x + 1])
+        result.append(to_swab[x])
+
+    return result
+
+
 def swab_record(record: list) -> Tuple[int, bytearray]:
     """Given a record from a hex file, return a new copy with adjacent data bytes swapped."""
-    result = bytearray()
-    for x in range(0, len(record[1]), 2):
-        result.append(record[1][x + 1])
-        result.append(record[1][x])
+    #result = bytearray()
+    #for x in range(0, len(record[1]), 2):
+    #    result.append(record[1][x + 1])
+    #    result.append(record[1][x])
 
-    return record[0], result
+    return record[0], swab_bytes(record[1])
 
 
 def range_filter_records(records: list, lower_bound: int, upper_bound: int) -> list:
@@ -55,7 +64,10 @@ def merge_records(records: list, default_data: bytes, base_address: int = 0) -> 
     result_list = bytearray()
     mark = 0
     for record in records:
-        if (record[0] < base_address) or ((record[0] + len(record[1])) > (base_address + len(default_data))):
+        if record[0] < base_address:
+            raise IndexError('Record address out of range.')
+
+        if (record[0] + len(record[1])) > (base_address + len(default_data)):
             raise IndexError('Record out of range.')
 
         point = (record[0] - base_address)
