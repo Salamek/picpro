@@ -300,7 +300,6 @@ class ProtocolInterface:
         self._command_start()
         self._set_programming_voltages_command(True)
         self.port.write(cmd.to_bytes(1, 'little'))
-
         self.port.write(command_body)
 
         response = self._read(timeout=20)
@@ -312,6 +311,39 @@ class ProtocolInterface:
             self.fuses_set = True
 
         return response == response_ok
+
+    def program_calibration(self, calibrate: int, fuse: int) -> bytes:
+        """
+        Program calibration
+        Args:
+            calibrate:
+            fuse:
+
+        Returns:
+
+        """
+        cmd = 10
+        self._need_chip_info()
+
+        self._command_start()
+        self._set_programming_voltages_command(True)
+        self.port.write(cmd.to_bytes(1, 'little'))
+
+        """
+        Calibration High (Byte)
+        Calibration Low  (Byte)
+        FUSE High (Byte)
+        FUSE Low  (Byte)
+        """
+        calibration = calibrate.to_bytes(2, 'big') + fuse.to_bytes(2, 'big')
+        self.port.write(calibration)
+
+        response = self._read(timeout=10)  # C= calibration fail, F = Fuse fail, Y = OK
+        self._set_programming_voltages_command(False)
+        self._command_end()
+        response_ok = b'Y'
+
+        return response
 
     def read_rom(self) -> bytes:
         """Returns contents of PIC ROM as a string of big-endian values."""

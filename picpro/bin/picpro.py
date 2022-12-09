@@ -143,6 +143,11 @@ def dump() -> None:
     elif mem_type == 'rom':
         print('Reading ROM into file {}...'.format(output_file))
         content = swab_bytes(protocol_interface.read_rom())
+    elif mem_type == 'config':
+        print('Reading CONFIG into file {}...'.format(output_file))
+        content = protocol_interface.read_config()
+        print(content)
+        return
     else:
         raise ValueError('Unknown memory type')
 
@@ -294,6 +299,7 @@ def prepare_flash_data_from_hex_file(chip_info: IChipInfoEntry, hex_file: HexFil
                     raise ValueError('Invalid ROM word: {}, ROM blank: {}'.format(hex(le_word), hex(rom_blank_word)))
         if swap_bytes is not None:
             break
+
     if swap_bytes:
         rom_records = [*map(swab_record, rom_records)]
         config_records = [*map(swab_record, config_records)]
@@ -317,7 +323,6 @@ def prepare_flash_data_from_hex_file(chip_info: IChipInfoEntry, hex_file: HexFil
 
     # FINALLY!  We create the byte-level data...
     rom_data = merge_records(rom_records, rom_blank)
-
     eeprom_data = merge_records(eeprom_records, eeprom_blank, 0x4200)
 
     # Extract fuse data, pic_id data, etc. from fuse records
@@ -328,19 +333,22 @@ def prepare_flash_data_from_hex_file(chip_info: IChipInfoEntry, hex_file: HexFil
         id_data = merge_records(id_data_raw, (b'\x00' * 8), 0x4000)
         # If this is a 16-bit core, leave id_data as-is.  Else we need to
         # take every other byte according to endian-ness.
+        # Config records are already converted to little-endian, so we set
+        # range(pick_byte, 8, 2) to range(1, 8, 2)
         if core_bits != 16:
-            id_data = bytearray([id_data[x] for x in range(pick_byte, 8, 2)])
+            id_data = bytearray([id_data[x] for x in range(1, 8, 2)])
 
     # Pull fuse data from config records
-    fuse_data_list = list(map(lambda word: struct.pack('>H', word), chip_info.programming_vars.fuse_blank))
-    fuse_data = b''.join(fuse_data_list)
+    fuse_data_blank = b''.join(map(lambda word: struct.pack('>H', word), chip_info.programming_vars.fuse_blank))
+    fuse_config = range_filter_records(
+        config_records,
+        0x400e,
+        0x4010
+    )
+
     fuse_data = merge_records(
-        range_filter_records(
-            config_records,
-            0x400e,
-            0x4010
-        ),
-        fuse_data,
+        fuse_config,
+        fuse_data_blank,
         0x400e
     )
 
@@ -395,7 +403,7 @@ def program_pic(
         # If write mode is active, program the ROM, EEPROM, ID and fuses.
         if is_program:
             # Write ROM, EEPROM, ID and fuses
-
+            chip_config = protocol_interface.read_config()
             print('Erasing Chip')
             if not protocol_interface.erase_chip():
                 print('Erasure failed.')
@@ -419,13 +427,20 @@ def program_pic(
                 print('Programming ID and fuses failed.')
                 return False
 
+            print('Programming CAL and fuses')
+            response = protocol_interface.program_calibration(chip_config.get('calibrate'), fuse_values[0])
+            if response == 'C':
+                print('Programming CAL failed.')
+                return False
+
         # Verify programmed data.
         # Behold, my godlike powers of verification:
         print('Verifying ROM')
         pic_rom_data = protocol_interface.read_rom()
         verification_result = True
 
-        if pic_rom_data == rom_data:
+        # !FIXME OSCAL is in last two bytes for 12F675 and other types... CALword=Y ??? Work with that
+        if pic_rom_data[:len(pic_rom_data) - 2] == rom_data[:len(rom_data) - 2]:
             print('ROM verified.')
         else:
             print('ROM verification failed.')
