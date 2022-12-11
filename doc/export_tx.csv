@@ -29,6 +29,8 @@ Time [s], Analyzer Name, Decoded Protocol Result
 10.320765000000000,To programmer,'4' (0x04)
 10.321294999999999,To programmer,'0' (0x00)
 
+
+ROM START
 10.323024999999999,To programmer,'0' (0x00)
 10.323555000000001,To programmer,'0' (0x00)
 10.324080000000000,To programmer,( (0x28)
@@ -2083,6 +2085,7 @@ Time [s], Analyzer Name, Decoded Protocol Result
 15.503640000000001,To programmer,'255' (0xFF)
 15.504165000000000,To programmer,4 (0x34)
 15.504690000000000,To programmer,< (0x3C)
+
 15.506405000000001,To programmer,? (0x3F)
 15.506930000000001,To programmer,'255' (0xFF)
 15.507455000000000,To programmer,? (0x3F)
@@ -2115,6 +2118,8 @@ Time [s], Analyzer Name, Decoded Protocol Result
 15.521644999999999,To programmer,'255' (0xFF)
 15.522169999999999,To programmer,? (0x3F)
 15.522700000000000,To programmer,'255' (0xFF)
+ROM END
+
 15.549620000000001,To programmer,'6' (0x06)
 15.600490000000001,To programmer,'8' (0x08)
 15.601395000000000,To programmer,'0' (0x00)

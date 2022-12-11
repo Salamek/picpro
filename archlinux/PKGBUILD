@@ -10,6 +10,7 @@ depends=(
     'python'
     'python-docopt'
     'python-pyserial'
+    'python-intelhex'
 )
 
 prepare() {

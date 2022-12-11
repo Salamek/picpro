@@ -401,9 +401,9 @@ def program_pic(
 
     try:
         # If write mode is active, program the ROM, EEPROM, ID and fuses.
+        chip_config = protocol_interface.read_config()
         if is_program:
             # Write ROM, EEPROM, ID and fuses
-            chip_config = protocol_interface.read_config()
             print('Erasing Chip')
             if not protocol_interface.erase_chip():
                 print('Erasure failed.')
@@ -439,10 +439,15 @@ def program_pic(
         pic_rom_data = protocol_interface.read_rom()
         verification_result = True
 
-        # !FIXME OSCAL is in last two bytes for 12F675 and other types... CALword=Y ??? Work with that
-        if pic_rom_data[:len(pic_rom_data) - 2] == rom_data[:len(rom_data) - 2]:
+        if chip_info.programming_vars.flag_calibration_value_in_rom:
+            # Some chips have cal data put on last two bytes of ROM dump
+            rom_data = rom_data[:len(rom_data) - 2] + chip_config.get('calibrate').to_bytes(2, 'big')
+
+        if pic_rom_data == rom_data:
             print('ROM verified.')
         else:
+            print('{} {}'.format(pic_rom_data[-1], pic_rom_data[-2]))
+            print('{} {}'.format(rom_data[-1], rom_data[-2]))
             print('ROM verification failed.')
             verification_result = False
 
