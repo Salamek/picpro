@@ -25,7 +25,7 @@ package:debian:
   stage: package
   script:
     - apt-get update -qy
-    - apt-get install -y python-all python3-pytest-runner python3-stdeb python3-pytest python3-pylint-common python3-pytest-cov python3-serial python3-requests tox dh-python python3-docopt
+    - apt-get install -y python-all python3-pytest-runner python3-stdeb python3-intelhex python3-pytest python3-pylint-common python3-pytest-cov python3-serial python3-requests tox dh-python python3-docopt
     - rm -rf "./deb_dist"
     - python3 setup.py --command-packages=stdeb.command bdist_deb
   tags:
@@ -39,7 +39,7 @@ package:debian:
 package:archlinux:
   stage: package
   script:
-    - pacman -Sy python-pip sudo openssh binutils fakeroot python-pyserial python-docopt --noconfirm
+    - pacman -Sy python-pip sudo openssh binutils fakeroot python-pyserial python-docopt python-setuptools --noconfirm
     - useradd -m -G users -s /bin/bash package
     - chown -R package:users archlinux
     - cd archlinux
