@@ -39,7 +39,7 @@ package:debian:
 package:archlinux:
   stage: package
   script:
-    - pacman -Sy python-pip sudo openssh binutils fakeroot python-pyserial python-docopt python-setuptools --noconfirm
+    - pacman -Sy python-pip sudo openssh binutils fakeroot python-pyserial python-docopt python-setuptools python-intelhex --noconfirm
     - useradd -m -G users -s /bin/bash package
     - chown -R package:users archlinux
     - cd archlinux
