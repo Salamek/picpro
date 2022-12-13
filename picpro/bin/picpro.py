@@ -402,6 +402,12 @@ def program_pic(
     try:
         # If write mode is active, program the ROM, EEPROM, ID and fuses.
         chip_config = protocol_interface.read_config()
+        print('Chip config: {}'.format(chip_config))
+        if chip_info.programming_vars.flag_calibration_value_in_rom:
+            # Some chips have cal data put on last two bytes of ROM dump
+            print('CAL is in ROM data, patching ROM to contain CAL data...')
+            rom_data = rom_data[:len(rom_data) - 2] + chip_config.get('calibrate').to_bytes(2, 'big')
+
         if is_program:
             # Write ROM, EEPROM, ID and fuses
             print('Erasing Chip')
@@ -427,21 +433,11 @@ def program_pic(
                 print('Programming ID and fuses failed.')
                 return False
 
-            print('Programming CAL and fuses')
-            response = protocol_interface.program_calibration(chip_config.get('calibrate'), fuse_values[0])
-            if response == 'C':
-                print('Programming CAL failed.')
-                return False
-
         # Verify programmed data.
         # Behold, my godlike powers of verification:
         print('Verifying ROM')
         pic_rom_data = protocol_interface.read_rom()
         verification_result = True
-
-        if chip_info.programming_vars.flag_calibration_value_in_rom:
-            # Some chips have cal data put on last two bytes of ROM dump
-            rom_data = rom_data[:len(rom_data) - 2] + chip_config.get('calibrate').to_bytes(2, 'big')
 
         if pic_rom_data == rom_data:
             print('ROM verified.')
