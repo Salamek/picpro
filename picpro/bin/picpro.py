@@ -442,9 +442,16 @@ def program_pic(
         if pic_rom_data == rom_data:
             print('ROM verified.')
         else:
-            print('{} {}'.format(pic_rom_data[-1], pic_rom_data[-2]))
-            print('{} {}'.format(rom_data[-1], rom_data[-2]))
+            no_of_zeros = pic_rom_data.count(b'\x00')
+            pic_rom_data_len = len(pic_rom_data)
+            if chip_info.programming_vars.flag_calibration_value_in_rom:
+                is_maybe_locked = pic_rom_data_len -2 == no_of_zeros
+            else:
+                is_maybe_locked = pic_rom_data_len == no_of_zeros
+
             print('ROM verification failed.')
+            if is_maybe_locked:
+                print('Maybe ROM is locked for reading?')
             verification_result = False
 
         if chip_info.has_eeprom():
