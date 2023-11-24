@@ -10,11 +10,13 @@ Command details:
     program             Program PIC chip.
     verify              Verify PIC flash.
     dump                Dump PIC data as binary.
+    erase               Erase PIC.
     chipinfo            Prints chipinfo as JSON in terminal.
 
 Usage:
     picpro program -p PORT -i HEX_FILE -t PIC_TYPE [--id=PIC_ID] [--fuse=FUSE_NAME:FUSE_VALUE...] [--icsp]
     picpro verify -p PORT -i HEX_FILE -t PIC_TYPE [--icsp]
+    picpro erase -p PORT -t PIC_TYPE [--icsp]
     picpro dump <mem_type> -p PORT -o HEX_FILE -t PIC_TYPE [--icsp]
     picpro chipinfo [<PIC_TYPE>]
     picpro (-h | --help)
@@ -156,6 +158,23 @@ def dump() -> None:
 
     with open(output_file, 'w') as file:
         intel_hex.write_hex_file(file)
+
+
+@command()
+def erase() -> None:
+    programmer_common_data = programmer_common_bootstrap(
+        OPTIONS['--port'],
+        OPTIONS['--pic_type'],
+        icsp_mode=OPTIONS['--icsp']
+    )
+
+    if not programmer_common_data:
+        return
+
+    _, protocol_interface = programmer_common_data
+    print('Erasing chip...')
+    protocol_interface.erase_chip()
+    print('Done!')
 
 
 @command()

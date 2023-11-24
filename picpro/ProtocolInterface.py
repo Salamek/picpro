@@ -212,7 +212,7 @@ class ProtocolInterface:
 
         word_count = (len(data) // 2)
         if self.chip_info.programming_vars.rom_size < word_count:  # type: ignore
-            raise InvalidValueError('Data too large for PIC ROM')
+            raise InvalidValueError('Data too large for PIC ROM {} > {}'.format(word_count, self.chip_info.programming_vars.rom_size))
 
         if ((word_count * 2) % 32) != 0:
             raise InvalidValueError('ROM data must be a multiple of 32 bytes in size.')
