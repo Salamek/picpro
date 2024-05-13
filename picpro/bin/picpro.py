@@ -12,6 +12,7 @@ Command details:
     dump                Dump PIC data as binary.
     erase               Erase PIC.
     chipinfo            Prints chipinfo as JSON in terminal.
+    hexinfo             Prints information about hexfile.
 
 Usage:
     picpro program -p PORT -i HEX_FILE -t PIC_TYPE [--id=PIC_ID] [--fuse=FUSE_NAME:FUSE_VALUE...] [--icsp]
@@ -19,6 +20,7 @@ Usage:
     picpro erase -p PORT -t PIC_TYPE [--icsp]
     picpro dump <mem_type> -p PORT -o HEX_FILE -t PIC_TYPE [--icsp]
     picpro chipinfo [<PIC_TYPE>]
+    picpro hexinfo <HEX_FILE> <PIC_TYPE>
     picpro (-h | --help)
 
 
@@ -191,6 +193,73 @@ def chipinfo() -> None:
 
     print(json.dumps(data))
 
+@command()
+def hexinfo() -> None:
+    pic_type = OPTIONS['<PIC_TYPE>']
+    hex_file_name = OPTIONS['<HEX_FILE>']
+
+    # Read hex file.
+    try:
+        hex_file = HexFileReader(hex_file_name)
+    except IOError:
+        print('Unable to find hex file "{}".'.format(hex_file_name))
+        print('Please verify that the file exists and that you have access to it.')
+        return None
+
+        # Get chip info
+    chip_info_filename = find_chip_data()
+    try:
+        chip_info_reader = ChipInfoReader(chip_info_filename)
+    except IOError:
+        print('Unable to locate chipinfo.cid file.')
+        print('Please verify that file is present in the same directory as this script, '
+              'and that the filename is in lowercase characters, and that you have access to read the file.')
+        return None
+
+    try:
+        chip_info = chip_info_reader.get_chip(pic_type)
+    except KeyError:
+        print('Unable to find chip type "{}" in data file.'.format(pic_type))
+        print('Please check that the spelling is correct and that data file is up to date.')
+        return None
+
+
+    try:
+        rom_data, eeprom_data, id_data, fuse_values = prepare_flash_data_from_hex_file(chip_info, hex_file)
+    except FuseError:
+        print('Invalid fuse setting.  Fuse names and valid settings for this chip are as follows:')
+        print(chip_info.fuse_doc())
+        return None
+
+    word_count_rom = (len(rom_data) // 2)
+    word_count_eeprom = (len(eeprom_data) // 2)
+    print('ROM {} words used, {} words free on chip'.format(word_count_rom, chip_info.programming_vars.rom_size - word_count_rom))
+    print('EEPROM {} words used, {} words free on chip'.format(word_count_eeprom, chip_info.programming_vars.eeprom_size - word_count_eeprom))
+
+    INDENT = '  '
+    INLIST = '- '
+    intel_hex = IntelHex(hex_file_name)
+    if intel_hex.start_addr:
+        keys = sorted(intel_hex.start_addr.keys())
+        if keys == ['CS', 'IP']:
+            entry = intel_hex.start_addr['CS'] * 16 + intel_hex.start_addr['IP']
+        elif keys == ['EIP']:
+            entry = intel_hex.start_addr['EIP']
+        else:
+            raise RuntimeError("unknown 'IntelHex.start_addr' found")
+        print("{:s}entry: 0x{:08X}".format(INDENT, entry))
+    segments = intel_hex.segments()
+    if segments:
+        print("{:s}data:".format(INDENT))
+        for s in segments:
+            print("{:s}{:s}{{ first: 0x{:08X}, last: 0x{:08X}, length: 0x{:08X} }}".format(INDENT, INLIST, s[0], s[1] - 1, s[1] - s[0]))
+    print("")
+
+    """
+    
+    if self.chip_info.programming_vars.rom_size < word_count:  # type: ignore
+        raise InvalidValueError('Data too large for PIC ROM {} > {}'.format(word_count, chip_info.programming_vars.rom_size))
+    """
 
 def find_chip_data() -> str:
     chip_data_files = [f for f in [
