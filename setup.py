@@ -11,7 +11,7 @@ def read_readme() -> str:
 
 setup(
     name='picpro',
-    version='0.1.1',
+    version='0.1.2',
     packages=find_packages(exclude=['tests', 'tests.*']),
     package_data={'picpro': ['py.typed']},
     install_requires=[
