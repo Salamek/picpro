@@ -268,6 +268,7 @@ def find_chip_data() -> str:
         os.path.abspath(os.path.join(APP_ROOT_FOLDER, '..', 'usr', 'lib', 'picpro', 'chipdata.cid')),  # Legacy search path
         os.path.abspath(os.path.join(APP_ROOT_FOLDER, '..', 'lib', 'picpro', 'chipdata.cid')),  # Legacy search path
         os.path.join(APP_ROOT_FOLDER, 'chipdata.cid'),
+        os.path.abspath(os.path.join(os.getenv('LOCALAPPDATA'), 'picpro', 'chipdata.cid')) # windows path
     ] if os.path.exists(f)]
 
     if len(chip_data_files) == 0:
