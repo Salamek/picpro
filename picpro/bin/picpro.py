@@ -262,14 +262,19 @@ def hexinfo() -> None:
     """
 
 def find_chip_data() -> str:
-    chip_data_files = [f for f in [
+    path_list = [
         os.path.join('/', 'usr', 'share', 'picpro', 'chipdata.cid'),
         os.path.abspath(os.path.join(APP_ROOT_FOLDER, '..', 'usr', 'share', 'picpro', 'chipdata.cid')),
         os.path.abspath(os.path.join(APP_ROOT_FOLDER, '..', 'usr', 'lib', 'picpro', 'chipdata.cid')),  # Legacy search path
         os.path.abspath(os.path.join(APP_ROOT_FOLDER, '..', 'lib', 'picpro', 'chipdata.cid')),  # Legacy search path
-        os.path.join(APP_ROOT_FOLDER, 'chipdata.cid'),
-        os.path.abspath(os.path.join(os.getenv('LOCALAPPDATA'), 'picpro', 'chipdata.cid')) # windows path
-    ] if os.path.exists(f)]
+        os.path.join(APP_ROOT_FOLDER, 'chipdata.cid')
+    ]
+
+    if os.name == 'nt':
+        # windows path
+        path_list.append(os.path.abspath(os.path.join(os.getenv('LOCALAPPDATA'), 'picpro', 'chipdata.cid')))
+
+    chip_data_files = [f for f in path_list if os.path.exists(f)]
 
     if len(chip_data_files) == 0:
         raise ValueError('chipdata.cid was not found in any search path')
