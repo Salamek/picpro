@@ -1,7 +1,10 @@
 import os
 from setuptools import setup, find_packages
 
-share_dir = os.getenv("SHAREDIR", "/usr/share")
+if os.name == 'nt':
+    share_dir = os.getenv('LOCALAPPDATA')
+else:
+    share_dir = os.getenv("SHAREDIR", "/usr/share")
 
 
 def read_readme() -> str:
