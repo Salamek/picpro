@@ -16,8 +16,12 @@ test:debian:
 test:archlinux:
   stage: test
   script:
-    - pacman -Sy python-pytest python-pylint python-pytest-cov python-pyserial python-docopt python-tox  --noconfirm
-    - tox -e py312
+    #- pacman -Sy python-pytest python-pylint python-pytest-cov python-pyserial python-docopt python-tox --noconfirm
+    #- tox -e py312
+    - pacman -Sy python-venv --noconfirm
+    - python -m venv venv
+    - ./venv/bin/pip install tox
+    - ./venv/bin/tox -e py312
   tags:
     - archlinux
 
