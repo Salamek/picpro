@@ -355,48 +355,65 @@ def prepare_flash_data_from_hex_file(chip_info: IChipInfoEntry, hex_file: HexFil
     eeprom_blank_byte = b'\xff'
     eeprom_blank = eeprom_blank_byte * chip_info.programming_vars.eeprom_size
 
-    rom_word_base = 0x0000
-    config_word_base = 0x4000
-    eeprom_word_base = 0x4200
-    rom_word_end = config_word_base
-    config_word_end = 0x4010
-    eeprom_word_end = 0xffff
+    if core_bits == 16:
+        rom_word_base = 0x0000
+        rom_word_end = 0x8000
+        eeprom_word_base = 0xf000
+        eeprom_word_end = 0xf0ff
+        config_word_base = 0x300000
+        config_word_end = 0x30000e
+        id_word_base = 0x200000
+        id_word_end = 0x200010
+    else:
+        rom_word_base = 0x0000
+        config_word_base = 0x4000
+        eeprom_word_base = 0x4200
+        rom_word_end = config_word_base
+        config_word_end = 0x4010
+        eeprom_word_end = 0xffff
 
     # Filter hex file data into ROM, config, and EEPROM:
     rom_records = range_filter_records(hex_file.records, rom_word_base, rom_word_end)
-
     config_records = range_filter_records(hex_file.records, config_word_base, config_word_end)
+
+    if core_bits == 16:
+        id_records = range_filter_records(hex_file.records, id_word_base, id_word_end)
 
     eeprom_records = range_filter_records(hex_file.records, eeprom_word_base, eeprom_word_end)
 
     # Try to detect whether the ROM data is big-endian or
     # little-endian.  If it is little-endian, swap bytes.
     swap_bytes = None
-    for record in rom_records:
-        if record[0] % 2 != 0:
-            raise ValueError('ROM record starts on odd address.')
-        for x in range(0, len(record[1]), 2):
-            if (x + 2) < len(record[1]):
-                be_word, = struct.unpack('>H', record[1][x:x + 2])
-                le_word, = struct.unpack('<H', record[1][x:x + 2])
+    if core_bits == 16:
+        swap_bytes = True
+    else:
+        for record in rom_records:
+            if record[0] % 2 != 0:
+                raise ValueError('ROM record starts on odd address.')
+            for x in range(0, len(record[1]), 2):
+                if (x + 2) < len(record[1]):
+                    be_word, = struct.unpack('>H', record[1][x:x + 2])
+                    le_word, = struct.unpack('<H', record[1][x:x + 2])
 
-                be_ok = ((be_word & rom_blank_word) == be_word)
-                le_ok = ((le_word & rom_blank_word) == le_word)
+                    be_ok = ((be_word & rom_blank_word) == be_word)
+                    le_ok = ((le_word & rom_blank_word) == le_word)
 
-                if be_ok and not le_ok:
-                    swap_bytes = False
-                    break
-                if le_ok and not be_ok:
-                    swap_bytes = True
-                    break
-                if not (le_ok or be_ok):
-                    raise ValueError('Invalid ROM word: {}, ROM blank: {}'.format(hex(le_word), hex(rom_blank_word)))
-        if swap_bytes is not None:
-            break
+                    if be_ok and not le_ok:
+                        swap_bytes = False
+                        break
+                    if le_ok and not be_ok:
+                        swap_bytes = True
+                        break
+                    if not (le_ok or be_ok):
+                        raise ValueError('Invalid ROM word: {}, ROM blank: {}'.format(hex(le_word), hex(rom_blank_word)))
+            if swap_bytes is not None:
+                break
 
     if swap_bytes:
         rom_records = [*map(swab_record, rom_records)]
         config_records = [*map(swab_record, config_records)]
+        if core_bits == 16:
+            id_records = [*map(swab_record, id_records)]
 
     # EEPROM is stored in the hex file with one byte per word, so we
     # need to pick one of the two bytes out of each word to program.
@@ -423,8 +440,12 @@ def prepare_flash_data_from_hex_file(chip_info: IChipInfoEntry, hex_file: HexFil
     if pic_id is not None:
         id_data = pic_id.encode('UTF-8')
     else:
-        id_data_raw = range_filter_records(config_records, 0x4000, 0x4008)
-        id_data = merge_records(id_data_raw, (b'\x00' * 8), 0x4000)
+        if core_bits == 16:
+            id_data_raw = range_filter_records(id_records, 0x100000, 0x100008)
+            id_data = merge_records(id_data_raw, (b'\x00' * 8), 0x100000)
+        else:
+            id_data_raw = range_filter_records(config_records, 0x4000, 0x4008)
+            id_data = merge_records(id_data_raw, (b'\x00' * 8), 0x4000)
         # If this is a 16-bit core, leave id_data as-is.  Else we need to
         # take every other byte according to endian-ness.
         # Config records are already converted to little-endian, so we set
@@ -434,17 +455,28 @@ def prepare_flash_data_from_hex_file(chip_info: IChipInfoEntry, hex_file: HexFil
 
     # Pull fuse data from config records
     fuse_data_blank = b''.join(map(lambda word: struct.pack('>H', word), chip_info.programming_vars.fuse_blank))
-    fuse_config = range_filter_records(
-        config_records,
-        0x400e,
-        0x4010
-    )
-
-    fuse_data = merge_records(
-        fuse_config,
-        fuse_data_blank,
-        0x400e
-    )
+    if core_bits == 16:
+        fuse_config = range_filter_records(
+            config_records,
+            0x300000,
+            0x30000e
+        )
+        fuse_data = merge_records(
+            fuse_config,
+            fuse_data_blank,
+            0x300000
+        )
+    else:
+        fuse_config = range_filter_records(
+            config_records,
+            0x400e,
+            0x4010
+        )
+        fuse_data = merge_records(
+            fuse_config,
+            fuse_data_blank,
+            0x400e
+        )
 
     # Go through each fuse listed in chip info.
     # Determine its current setting in fuse_value, and accumulate a new
@@ -560,7 +592,7 @@ def program_pic(
 
         if verification_result and (chip_info.get_core_bits() == 16):
             print('Committing 18Fxxxx fuse data.')
-            protocol_interface.program_18fxxxx_fuse()
+            protocol_interface.program_18fxxxx_fuse(fuse_values)
 
     except InvalidResponseError as e:
         print('Error: Communication failure.  This may be a bug in this script or a problem with your programmer hardware. ({})'.format(e))

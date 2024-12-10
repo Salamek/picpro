@@ -7,7 +7,7 @@ from picpro.exceptions import InvalidRecordError, InvalidChecksumError
 class HexFileReader:
     def __init__(self, file_name: str):
         with open(file_name, 'r', encoding='ascii') as file:
-
+            seg_address = 0
             ext_address = 0
             self.records = []
             eof = False
@@ -39,15 +39,15 @@ class HexFileReader:
 
                     if record_type == 0:
                         # data record
-                        self.records.append(((address | ext_address), data))
+                        self.records.append(((address | ext_address)+seg_address, data))
                     elif record_type == 1:
                         # EOF record
                         eof = True
                     elif record_type == 2:
-                        # Ext. linear address record
-                        ext_address = struct.unpack('>H', data)[0] << 16
+                        # segment linear address record
+                        seg_address = struct.unpack('>H', data)[0] << 4
                     elif record_type == 4:
-                        ext_address = struct.unpack('>H', data)[0] << 4
+                        ext_address = struct.unpack('>H', data)[0] << 16
                     else:
                         raise InvalidRecordError('Unknown record type ({})'.format(record_type))
                 elif len(line) != 0:
