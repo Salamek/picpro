@@ -1,4 +1,3 @@
-from typing import Union
 from picpro.ProgrammingVars import ProgrammingVars
 
 
@@ -10,7 +9,7 @@ class IChipInfoEntry:
         """Returns a ProgrammingVars"""
         raise NotImplementedError
 
-    def get_core_bits(self) -> Union[int, None]:
+    def get_core_bits(self) -> int:
         """Returns a core bits"""
         raise NotImplementedError
 

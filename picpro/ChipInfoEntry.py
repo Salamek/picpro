@@ -1,14 +1,35 @@
-from typing import Union
+import dataclasses
 from picpro.IChipInfoEntry import IChipInfoEntry
 from picpro.ProgrammingVars import ProgrammingVars
 from picpro.exceptions import FuseError
 from picpro.tools import indexwise_and
 
 
+@dataclasses.dataclass
 class ChipInfoEntry(IChipInfoEntry):
     """A single entry from a chipinfo file, with methods for feeding data to protocol_interface."""
 
-    core_type_dict = {
+    chip_name: str
+    include: bool
+    socket_image: str
+    erase_mode: int
+    flash_chip: bool
+    power_sequence: str
+    program_delay: int
+    program_tries: int
+    over_program: int
+    core_type: str
+    rom_size: int
+    eeprom_size: int
+    fuse_blank: list
+    cp_warn: bool
+    cal_word: bool
+    band_gap: bool
+    icsp_only: bool
+    chip_id: int
+    fuses: dict
+
+    _core_type_dict = {
         'bit16_a': 1,
         'bit16_b': 2,
         'bit14_g': 3,
@@ -25,7 +46,7 @@ class ChipInfoEntry(IChipInfoEntry):
         'newf12b': None  # !FIXME Not in docs
     }
 
-    power_sequence_dict = {
+    _power_sequence_dict = {
         'Vcc': 0,
         'VccVpp1': 1,
         'VccVpp2': 2,
@@ -35,7 +56,7 @@ class ChipInfoEntry(IChipInfoEntry):
         'VccFastVpp2': 2
     }
 
-    vcc_vpp_delay_dict = {
+    _vcc_vpp_delay_dict = {
         'Vcc': False,
         'VccVpp1': False,
         'VccVpp2': False,
@@ -45,40 +66,13 @@ class ChipInfoEntry(IChipInfoEntry):
         'VccFastVpp2': True
     }
 
-    socket_image_dict = {
+    _socket_image_dict = {
         '8pin': 'socket pin 13',
         '14pin': 'socket pin 13',
         '18pin': 'socket pin 2',
         '28Npin': 'socket pin 1',
         '40pin': 'socket pin 1'
     }
-
-    def __init__(self,
-                 chip_name: str, include: bool, socket_image: str, erase_mode: int,
-                 flash_chip: bool, power_sequence: str, program_delay: int, program_tries: int,
-                 over_program: int, core_type: int, rom_size: int, eeprom_size: int,
-                 fuse_blank: list, cp_warn: bool, cal_word: bool, band_gap: bool, icsp_only: bool,
-                 chip_id: int, fuses: dict):
-
-        self.chip_name = chip_name
-        self.include = include
-        self.socket_image = socket_image
-        self.erase_mode = erase_mode
-        self.flash_chip = flash_chip
-        self.power_sequence = power_sequence
-        self.program_delay = program_delay
-        self.program_tries = program_tries
-        self.over_program = over_program
-        self.core_type = core_type
-        self.rom_size = rom_size
-        self.eeprom_size = eeprom_size
-        self.fuse_blank = fuse_blank
-        self.cp_warn = cp_warn
-        self.cal_word = cal_word
-        self.band_gap = band_gap
-        self.icsp_only = icsp_only
-        self.chip_id = chip_id
-        self.fuses = fuses
 
     def to_dict(self) -> dict:
         return {
@@ -106,34 +100,38 @@ class ChipInfoEntry(IChipInfoEntry):
     @property
     def programming_vars(self) -> ProgrammingVars:
         """Returns a ProgrammingVars"""
+
+        core_type_int = self._core_type_dict.get(self.core_type)
+        if not core_type_int:
+            raise ValueError('Failed to identify core_type')
+
         return ProgrammingVars(
             rom_size=self.rom_size,
             eeprom_size=self.eeprom_size,
-            core_type=self.core_type,
+            core_type=core_type_int,
             flag_calibration_value_in_rom=self.cal_word,
             flag_band_gap_fuse=self.band_gap,
             # T.Nixon says this is the rule for this flag.
-            flag_18f_single_panel_access_mode=self.core_type == self.core_type_dict['bit16_a'],
-            flag_vcc_vpp_delay=self.vcc_vpp_delay_dict[self.power_sequence],
+            flag_18f_single_panel_access_mode=self.core_type == 'bit16_a',
+            flag_vcc_vpp_delay=self._vcc_vpp_delay_dict[self.power_sequence],
             program_delay=self.program_delay,
-            power_sequence=self.power_sequence_dict[self.power_sequence],
+            power_sequence=self._power_sequence_dict[self.power_sequence],
             erase_mode=self.erase_mode,
             program_retries=self.program_tries,
             over_program=self.over_program,
             fuse_blank=self.fuse_blank,
         )
 
-    def get_core_bits(self) -> Union[int, None]:
-        core_type = self.core_type
+    def get_core_bits(self) -> int:
 
-        if core_type in [1, 2]:
+        if self.core_type in ['bit16_a', 'bit16_b', 'bit16_c']:
             return 16
-        if core_type in [3, 5, 6, 7, 8, 9, 10]:
+        if self.core_type in ['bit14_a', 'bit14_b', 'bit14_c', 'bit14_d', 'bit14_e', 'bit14_f', 'bit14_g', 'bit14_h']:
             return 14
-        if core_type in [4]:
+        if self.core_type in ['bit12_a', 'bit12_b']:
             return 12
 
-        return None
+        raise ValueError('Failed to detect core bits')
 
     def decode_fuse_data(self, fuse_values: list) -> dict:
         """Given a list of fuse values, return a dict of symbolic
@@ -191,7 +189,7 @@ class ChipInfoEntry(IChipInfoEntry):
         return self.eeprom_size != 0
 
     def pin1_location_text(self) -> str:
-        return self.socket_image_dict[self.socket_image]
+        return self._socket_image_dict[self.socket_image]
 
     def fuse_doc(self) -> str:
         result = ''
