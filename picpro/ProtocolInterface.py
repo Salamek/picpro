@@ -357,7 +357,7 @@ class ProtocolInterface:
         self._set_programming_voltages_command(True)
         self.port.write(cmd.to_bytes(1, 'little'))
 
-        response = self._read(rom_size)
+        response = self._read(rom_size, timeout=180)
         self._set_programming_voltages_command(False)
         self._command_end()
         return response
@@ -446,16 +446,22 @@ class ProtocolInterface:
 
         return response == b'Y'
 
-    def program_18fxxxx_fuse(self) -> bool:
+    def program_18fxxxx_fuse(self, fuses: List[int]) -> bool:
         """Commits fuse values previously loaded using program_id_fuses()"""
         cmd = 17
         self._need_chip_info()
         self._need_fuses()
-        self._command_start(cmd)
+
+        command_body = ((b'\x00'*10) + struct.pack('<HHHHHHH', *fuses)) # send all 0 in id, and then the fuse values
+        self._command_start()
+        self._set_programming_voltages_command(True)
+        self.port.write(cmd.to_bytes(1, 'little'))
+        self.port.write(command_body)
         # It appears the command will return 'B' on chips for which
         # this isn't appropriate?
         response = self._read(1)
         result = response == b'Y'
+        self._set_programming_voltages_command(False)
         self._command_end()
 
         return result
