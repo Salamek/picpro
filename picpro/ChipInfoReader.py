@@ -1,6 +1,6 @@
 import re
 import logging
-from typing import Union, List, Dict
+from typing import List, Dict, Optional
 from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.exceptions import FormatError
 
@@ -13,10 +13,6 @@ def handle_int(input_str: str) -> int:
     return int(input_str, 10)
 
 
-def handle_core_type(input_str: str) -> Union[int, None]:
-    return ChipInfoEntry.core_type_dict.get(input_str)
-
-
 def handle_fuse_blank(input_str: str) -> List[int]:
     return [int(x, 16) for x in input_str.strip().split(' ')]
 
@@ -25,7 +21,7 @@ def handle_lower(input_str: str) -> str:
     return input_str.lower()
 
 
-def handle_bool(input_str: str) -> Union[bool, None]:
+def handle_bool(input_str: str) -> Optional[bool]:
     boolean_dict = {
         'y': True,
         '1': True,
@@ -74,7 +70,7 @@ class ChipInfoReader:
             'band_gap': handle_bool,
             'cal_word': handle_bool,
             'chip_id': handle_hex,
-            'core_type': handle_core_type,
+            'core_type': handle_lower,
             'cp_warn': handle_bool,
             'eeprom_size': handle_hex,
             'erase_mode': handle_int,
@@ -90,7 +86,7 @@ class ChipInfoReader:
 
         # Open file and split it into data blocks, so we can process data in blocks
         with open(file_name, 'r', encoding='UTF-8') as file:
-            block: Union[None, dict] = None
+            block: Optional[dict] = None
             lines = file.readlines()
             number_of_lines = len(lines)
             for line_index, line in enumerate(lines):
@@ -130,8 +126,7 @@ class ChipInfoReader:
             try:
                 found_special_handler = self.special_handlers.get(lhs)
                 if found_special_handler:
-                    special_handler = found_special_handler
-                    block[lhs] = special_handler(rhs.lower())
+                    block[lhs] = found_special_handler(rhs.lower())
                 else:
                     block[lhs] = rhs
             except NameError as e:
