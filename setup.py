@@ -1,4 +1,5 @@
 import os
+import sys
 from setuptools import setup, find_packages
 
 if os.name == 'nt':
@@ -6,6 +7,9 @@ if os.name == 'nt':
 else:
     share_dir = os.getenv("SHAREDIR", "/usr/share")
 
+if not share_dir:
+    print('Failed to identify SHAREDIR, exiting')
+    sys.exit(1)
 
 def read_readme() -> str:
     with open('README.md', 'r', encoding='utf-8') as f:

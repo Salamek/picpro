@@ -158,7 +158,7 @@ def dump() -> None:
     intel_hex = IntelHex()
     intel_hex.frombytes(content)
 
-    with open(output_file, 'w') as file:
+    with open(output_file, 'wb') as file:
         intel_hex.write_hex_file(file)
 
 
@@ -223,16 +223,15 @@ def hexinfo() -> None:
         print('Please check that the spelling is correct and that data file is up to date.')
         return None
 
-
     try:
-        rom_data, eeprom_data, id_data, fuse_values = prepare_flash_data_from_hex_file(chip_info, hex_file)
+        rom_data, eeprom_data, _id_data, _fuse_values = prepare_flash_data_from_hex_file(chip_info, hex_file)
     except FuseError:
         print('Invalid fuse setting.  Fuse names and valid settings for this chip are as follows:')
         print(chip_info.fuse_doc())
         return None
 
-    word_count_rom = (len(rom_data) // 2)
-    word_count_eeprom = (len(eeprom_data) // 2)
+    word_count_rom = len(rom_data) // 2
+    word_count_eeprom = len(eeprom_data) // 2
     print('ROM {} words used, {} words free on chip'.format(word_count_rom, chip_info.programming_vars.rom_size - word_count_rom))
     print('EEPROM {} words used, {} words free on chip'.format(word_count_eeprom, chip_info.programming_vars.eeprom_size - word_count_eeprom))
 
@@ -255,11 +254,10 @@ def hexinfo() -> None:
             print("{:s}{:s}{{ first: 0x{:08X}, last: 0x{:08X}, length: 0x{:08X} }}".format(INDENT, INLIST, s[0], s[1] - 1, s[1] - s[0]))
     print("")
 
-    """
-    
-    if self.chip_info.programming_vars.rom_size < word_count:  # type: ignore
-        raise InvalidValueError('Data too large for PIC ROM {} > {}'.format(word_count, chip_info.programming_vars.rom_size))
-    """
+    #if self.chip_info.programming_vars.rom_size < word_count:  # type: ignore
+    #    raise InvalidValueError('Data too large for PIC ROM {} > {}'.format(word_count, chip_info.programming_vars.rom_size))
+    return None
+
 
 def find_chip_data() -> str:
     path_list = [
@@ -271,8 +269,10 @@ def find_chip_data() -> str:
     ]
 
     if os.name == 'nt':
-        # windows path
-        path_list.append(os.path.abspath(os.path.join(os.getenv('LOCALAPPDATA'), 'picpro', 'chipdata.cid')))
+        local_app_data = os.getenv('LOCALAPPDATA')
+        if local_app_data:
+            # windows path
+            path_list.append(os.path.abspath(os.path.join(local_app_data, 'picpro', 'chipdata.cid')))
 
     chip_data_files = [f for f in path_list if os.path.exists(f)]
 
@@ -342,13 +342,17 @@ def programmer_common_bootstrap(port: str, pic_type: str, icsp_mode: bool) -> Un
     return chip_info, protocol_interface
 
 
-def prepare_flash_data_from_hex_file(chip_info: IChipInfoEntry, hex_file: HexFileReader, pic_id: Optional[str] = None, fuses: Optional[dict] = None) -> tuple:
+def prepare_flash_data_from_hex_file(
+        chip_info: IChipInfoEntry,
+        hex_file: HexFileReader,
+        pic_id: Optional[str] = None,
+        fuses: Optional[dict] = None
+) -> tuple:
+    # pylint: disable=too-many-statements,too-many-branches
     # Generate blank ROM and EEPROM of appropriate size.
     core_bits = chip_info.get_core_bits()
-    if not core_bits:
-        raise ValueError('Failed to detect core bits')
     rom_blank_word = 0xffff << core_bits
-    rom_blank_word = (~rom_blank_word & 0xffff)
+    rom_blank_word = ~rom_blank_word & 0xffff
     rom_blank_bytes = struct.pack('>H', rom_blank_word)
     rom_blank = rom_blank_bytes * chip_info.programming_vars.rom_size
 
@@ -395,8 +399,8 @@ def prepare_flash_data_from_hex_file(chip_info: IChipInfoEntry, hex_file: HexFil
                     be_word, = struct.unpack('>H', record[1][x:x + 2])
                     le_word, = struct.unpack('<H', record[1][x:x + 2])
 
-                    be_ok = ((be_word & rom_blank_word) == be_word)
-                    le_ok = ((le_word & rom_blank_word) == le_word)
+                    be_ok = (be_word & rom_blank_word) == be_word
+                    le_ok = (le_word & rom_blank_word) == le_word
 
                     if be_ok and not le_ok:
                         swap_bytes = False

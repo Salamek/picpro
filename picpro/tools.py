@@ -54,7 +54,7 @@ def range_filter_records(records: list, lower_bound: int, upper_bound: int) -> l
                 result.append((record[0], record[1][0:slice_length]))
         elif record[0] < lower_bound < (record[0] + len(record[1])):
             # case 2
-            slice_pos = (lower_bound - record[0])
+            slice_pos = lower_bound - record[0]
             result.append((lower_bound, record[1][slice_pos:len(record[1])]))
     return result
 
@@ -70,7 +70,7 @@ def merge_records(records: list, default_data: bytes, base_address: int = 0) -> 
         if (record[0] + len(record[1])) > (base_address + len(default_data)):
             raise IndexError('Record out of range.')
 
-        point = (record[0] - base_address)
+        point = record[0] - base_address
         if mark != point:
             result_list += default_data[mark:point]
             mark = point

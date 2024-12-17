@@ -34,7 +34,7 @@ class ProtocolInterface:
             end_time = init_time + timeout
         while (count > 0) and ((end_time is None) or (time.time() < end_time)):
             read_result = self.port.read(count)
-            count = (count - len(read_result))
+            count = count - len(read_result)
             result = result + read_result
 
         return result
@@ -96,7 +96,7 @@ class ProtocolInterface:
 
         # Check for acknowledgement
         ack = self._read(1)
-        result = (ack == b'P')
+        result = ack == b'P'
         if not result:
             raise InvalidResponseError('No acknowledgement for command start.')
 
@@ -114,7 +114,7 @@ class ProtocolInterface:
         cmd = b'\x01'
         self.port.write(cmd)
         ack = self._read(1, timeout=10)
-        result = (ack == b'Q')
+        result = ack == b'Q'
         if not result:
             if ack != b'':
                 raise InvalidResponseError('Unexpected response ("{!r}") in command end.'.format(ack))
@@ -175,7 +175,7 @@ class ProtocolInterface:
         response = self._read(1)
         self._command_end()
 
-        result = (response == b'I')
+        result = response == b'I'
         if result:
             self.chip_info = chip_info
         else:
@@ -210,9 +210,10 @@ class ProtocolInterface:
         cmd = 7
         self._need_chip_info()
 
-        word_count = (len(data) // 2)
-        if self.chip_info.programming_vars.rom_size < word_count:  # type: ignore
-            raise InvalidValueError('Data too large for PIC ROM {} > {}'.format(word_count, self.chip_info.programming_vars.rom_size))
+        word_count = len(data) // 2
+        rom_size = self.chip_info.programming_vars.rom_size  # type: ignore
+        if rom_size < word_count:
+            raise InvalidValueError('Data too large for PIC ROM {} > {}'.format(word_count, rom_size))
 
         if ((word_count * 2) % 32) != 0:
             raise InvalidValueError('ROM data must be a multiple of 32 bytes in size.')
@@ -280,13 +281,13 @@ class ProtocolInterface:
         cmd = 9
         self._need_chip_info()
 
-        core_bits = self.chip_info.get_core_bits()  # type: ignore
+        core_bits = self.chip_info.get_core_bits() # type: ignore
         if core_bits == 16:
             if len(pic_id) != 8:
                 raise InvalidValueError('Should have 8-byte ID for 16 bit core.')
             if len(fuses) != 7:
                 raise InvalidValueError('Should have 7 fuses for 16 bit core.')
-            command_body = (b'00' + pic_id + struct.pack('<HHHHHHH', *fuses))
+            command_body = b'00' + pic_id + struct.pack('<HHHHHHH', *fuses)
             response_ok = b'Y'
         else:
             if len(fuses) != 1:
@@ -329,19 +330,18 @@ class ProtocolInterface:
         self._set_programming_voltages_command(True)
         self.port.write(cmd.to_bytes(1, 'little'))
 
-        """
-        Calibration High (Byte)
-        Calibration Low  (Byte)
-        FUSE High (Byte)
-        FUSE Low  (Byte)
-        """
+        # Calibration High (Byte)
+        # Calibration Low  (Byte)
+        # FUSE High (Byte)
+        # FUSE Low  (Byte)
+
         calibration = calibrate.to_bytes(2, 'big') + fuse.to_bytes(2, 'big')
         self.port.write(calibration)
 
         response = self._read(timeout=10)  # C= calibration fail, F = Fuse fail, Y = OK
         self._set_programming_voltages_command(False)
         self._command_end()
-        response_ok = b'Y'
+        # response_ok = b'Y'
 
         return response
 
@@ -452,7 +452,7 @@ class ProtocolInterface:
         self._need_chip_info()
         self._need_fuses()
 
-        command_body = ((b'\x00'*10) + struct.pack('<HHHHHHH', *fuses)) # send all 0 in id, and then the fuse values
+        command_body = (b'\x00'*10) + struct.pack('<HHHHHHH', *fuses)  # send all 0 in id, and then the fuse values
         self._command_start()
         self._set_programming_voltages_command(True)
         self.port.write(cmd.to_bytes(1, 'little'))

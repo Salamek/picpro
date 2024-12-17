@@ -1,6 +1,7 @@
 import os
 import pytest
 from picpro.ChipInfoReader import ChipInfoReader
+from picpro.ProgrammingVars import ProgrammingVars
 
 
 @pytest.fixture(scope="function")  # type: ignore
@@ -29,7 +30,7 @@ def test_get_chip(chip_data_path: str) -> None:
         'flash_chip': True,
         'power_sequence': 'VccVpp1',
         'program_delay': 20,
-        'core_type': None,
+        'core_type': 'newf12b',
         'rom_size': 256,
         'eeprom_size': 0,
         'fuse_blank': [4095],
@@ -61,6 +62,30 @@ def test_get_chip(chip_data_path: str) -> None:
     assert chip_info.to_dict() == expect
 
 
+def test_get_chip_programing_vars(chip_data_path: str) -> None:
+    chip_info_reader = ChipInfoReader(chip_data_path)
+
+    expect = ProgrammingVars(
+        rom_size=4096,
+        eeprom_size=0,
+        core_type=7,
+        flag_calibration_value_in_rom=False,
+        flag_band_gap_fuse=False,
+        flag_vcc_vpp_delay=True,
+        flag_18f_single_panel_access_mode=False,
+        program_delay=10,
+        power_sequence=1,
+        erase_mode=3,
+        program_retries=1,
+        over_program=0,
+        fuse_blank=[16383, 16383]
+    )
+
+    chip_info = chip_info_reader.get_chip('16f737')
+
+    assert chip_info.programming_vars == expect
+
+
 def test_get_chip_multiple_fuses(chip_data_path: str) -> None:
     chip_info_reader = ChipInfoReader(chip_data_path)
 
@@ -72,7 +97,7 @@ def test_get_chip_multiple_fuses(chip_data_path: str) -> None:
         'flash_chip': True,
         'power_sequence': 'VccFastVpp1',
         'program_delay': 10,
-        'core_type': 7,
+        'core_type': 'bit14_c',
         'rom_size': 4096,
         'eeprom_size': 0,
         'fuse_blank': [16383, 16383],
