@@ -158,7 +158,7 @@ def dump() -> None:
     intel_hex = IntelHex()
     intel_hex.frombytes(content)
 
-    with open(output_file, 'wb') as file:
+    with open(output_file, 'w', encoding='ascii') as file:
         intel_hex.write_hex_file(file)
 
 
