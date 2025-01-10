@@ -18,7 +18,7 @@ Usage:
     picpro program -p PORT -i HEX_FILE -t PIC_TYPE [--id=PIC_ID] [--fuse=FUSE_NAME:FUSE_VALUE...] [--icsp]
     picpro verify -p PORT -i HEX_FILE -t PIC_TYPE [--icsp]
     picpro erase -p PORT -t PIC_TYPE [--icsp]
-    picpro dump <mem_type> -p PORT -o HEX_FILE -t PIC_TYPE [--icsp]
+    picpro dump <mem_type> -p PORT -o HEX_FILE -t PIC_TYPE [--icsp] [--binary]
     picpro chipinfo [<PIC_TYPE>]
     picpro hexinfo <HEX_FILE> <PIC_TYPE>
     picpro (-h | --help)
@@ -153,10 +153,14 @@ def dump() -> None:
     elif mem_type == 'config':
         print('Reading CONFIG into file {}...'.format(output_file))
         content = protocol_interface.read_config()
-        print(content)
-        return
     else:
         raise ValueError('Unknown memory type')
+
+    if OPTIONS['--binary']:
+        # Binary dump requested
+        with open(output_file, 'wb') as binary_file:
+            binary_file.write(content)
+        return
 
     intel_hex = IntelHex()
     intel_hex.frombytes(content)
