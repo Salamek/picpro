@@ -21,7 +21,7 @@ test:archlinux:
     - pacman -Sy python-virtualenv --noconfirm
     - python -m venv venv
     - ./venv/bin/pip install tox
-    - ./venv/bin/tox -e py312
+    - ./venv/bin/tox -e py313
   tags:
     - archlinux
 
