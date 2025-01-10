@@ -66,7 +66,7 @@ Command details:
 Usage:
     picpro program -p PORT -i HEX_FILE -t PIC_TYPE [--id=PIC_ID] [--fuse=FUSE_NAME:FUSE_VALUE...] [--icsp]
     picpro verify -p PORT -i HEX_FILE -t PIC_TYPE [--icsp]
-    picpro dump <mem_type> -p PORT -b BIN_FILE -t PIC_TYPE [--icsp]
+    picpro dump <mem_type> -p PORT -b BIN_FILE -t PIC_TYPE [--icsp] [--binary]
     picpro (-h | --help)
 
 
@@ -78,6 +78,7 @@ Options:
     -t PIC_TYPE --pic_type=PIC_TYPE  Pic type you are programming/reading.
     -i HEX_FILE --hex_file=HEX_FILE  Hex file to flash or to read.
     -b BIN_FILE --bin_file=BIN_FILE  Bin file path.
+    --binary                         Input/Output file is in binary.
 
 ```
 
