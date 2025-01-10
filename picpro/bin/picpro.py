@@ -136,12 +136,15 @@ def dump() -> None:
     if not programmer_common_data:
         return
 
-    _, protocol_interface = programmer_common_data
+    chip_info, protocol_interface = programmer_common_data
 
     mem_type = OPTIONS['<mem_type>']
     output_file = OPTIONS['--hex_file']
 
     if mem_type == 'eeprom':
+        if not chip_info.has_eeprom:
+            print('This chip has no eeprom!')
+            return
         print('Reading EEPROM into file {}...'.format(output_file))
         content = swab_bytes(protocol_interface.read_eeprom())
     elif mem_type == 'rom':
