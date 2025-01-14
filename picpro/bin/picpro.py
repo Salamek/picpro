@@ -32,6 +32,7 @@ Options:
     -t PIC_TYPE --pic_type=PIC_TYPE  Pic type you are programming/reading.
     -i HEX_FILE --hex_file=HEX_FILE  Hex file to flash or to read.
     -o HEX_FILE --hex_file=HEX_FILE  Hex file to write.
+    --binary                         Input/Output file is in binary.
 """
 
 import os.path
