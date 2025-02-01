@@ -94,16 +94,16 @@ picpro program -p /dev/ttyUSB0 -i YOUR_HEX_FILE.hex -t 12F675
 picpro verify -p /dev/ttyUSB0 -i YOUR_HEX_FILE.hex -t 12F675
 ```
 
-### Dump ROM as bin file
+### Dump ROM as hex file
 
 ```bash
-picpro dump rom -p /dev/ttyUSB0 -o dump.rom -t 12F675
+picpro dump rom -p /dev/ttyUSB0 -o rom.hex -t 12F675
 ```
 
-### Dump EEPROM as bin file
+### Dump EEPROM as hex file
 
 ```bash
-picpro dump eeprom -p /dev/ttyUSB0 -o dump.eeprom -t 12F675
+picpro dump eeprom -p /dev/ttyUSB0 -o eeprom.hex -t 12F675
 ```
 
 ### Program chip via ISCP
