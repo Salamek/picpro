@@ -8,7 +8,7 @@ else:
     share_dir = os.getenv("SHAREDIR", "/usr/share")
 
 if not share_dir:
-    print('Failed to identify SHAREDIR, exiting')
+    print('Failed to identify SHAREDIR, exiting.')
     sys.exit(1)
 
 def read_readme() -> str:
