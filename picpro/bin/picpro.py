@@ -144,7 +144,7 @@ def dump() -> None:
 
     if mem_type == 'eeprom':
         if not chip_info.has_eeprom:
-            print('This chip has no eeprom!')
+            print('This chip has no EEPROM!')
             return
         print('Reading EEPROM into file {}...'.format(output_file))
         content = swab_bytes(protocol_interface.read_eeprom())
@@ -228,20 +228,20 @@ def hexinfo() -> None:
         chip_info = chip_info_reader.get_chip(pic_type)
     except KeyError:
         print('Unable to find chip type "{}" in data file.'.format(pic_type))
-        print('Please check that the spelling is correct and that data file is up to date.')
+        print('Please check that the spelling is correct, and that data file is up-to-date.')
         return None
 
     try:
         rom_data, eeprom_data, _id_data, _fuse_values = prepare_flash_data_from_hex_file(chip_info, hex_file)
     except FuseError:
-        print('Invalid fuse setting.  Fuse names and valid settings for this chip are as follows:')
+        print('Invalid fuse setting. Fuse names and valid settings for this chip are as follows:')
         print(chip_info.fuse_doc())
         return None
 
     word_count_rom = len(rom_data) // 2
     word_count_eeprom = len(eeprom_data) // 2
-    print('ROM {} words used, {} words free on chip'.format(word_count_rom, chip_info.programming_vars.rom_size - word_count_rom))
-    print('EEPROM {} words used, {} words free on chip'.format(word_count_eeprom, chip_info.programming_vars.eeprom_size - word_count_eeprom))
+    print('ROM {} words used, {} words free on chip.'.format(word_count_rom, chip_info.programming_vars.rom_size - word_count_rom))
+    print('EEPROM {} words used, {} words free on chip.'.format(word_count_eeprom, chip_info.programming_vars.eeprom_size - word_count_eeprom))
 
     INDENT = '  '
     INLIST = '- '
@@ -333,7 +333,7 @@ def programmer_common_bootstrap(port: str, pic_type: str, icsp_mode: bool) -> Un
         chip_info = chip_info_reader.get_chip(pic_type)
     except KeyError:
         print('Unable to find chip type "{}" in data file.'.format(pic_type))
-        print('Please check that the spelling is correct and that data file is up to date.')
+        print('Please check that the spelling is correct, and that data file is up-to-date.')
         return None
 
     # Initialize programming variables
@@ -533,7 +533,7 @@ def program_pic(
     try:
         rom_data, eeprom_data, id_data, fuse_values = prepare_flash_data_from_hex_file(chip_info, hex_file, pic_id, fuses)
     except FuseError:
-        print('Invalid fuse setting.  Fuse names and valid settings for this chip are as follows:')
+        print('Invalid fuse setting. Fuse names and valid settings for this chip are as follows:')
         print(chip_info.fuse_doc())
         return False
 
@@ -543,37 +543,37 @@ def program_pic(
         print('Chip config: {}'.format(chip_config))
         if chip_info.programming_vars.flag_calibration_value_in_rom:
             # Some chips have cal data put on last two bytes of ROM dump
-            print('CAL is in ROM data, patching ROM to contain CAL data...')
+            print('CAL is in ROM data, patching ROM to contain the same CAL data...')
             rom_data = rom_data[:len(rom_data) - 2] + chip_config.get('calibrate').to_bytes(2, 'big')
 
         if is_program:
             # Write ROM, EEPROM, ID and fuses
-            print('Erasing Chip')
+            print('Erasing chip.')
             if not protocol_interface.erase_chip():
                 print('Erasure failed.')
                 return False
 
             protocol_interface.cycle_programming_voltages()
 
-            print('Programming ROM')
+            print('Programming ROM.')
             if not protocol_interface.program_rom(rom_data):
                 print('ROM programming failed.')
                 return False
 
             if chip_info.has_eeprom():
-                print('Programming EEPROM')
+                print('Programming EEPROM.')
                 if not protocol_interface.program_eeprom(eeprom_data):
                     print('EEPROM programming failed.')
                     return False
 
-            print('Programming ID and fuses')
+            print('Programming ID and fuses.')
             if not protocol_interface.program_id_fuses(id_data, fuse_values):
                 print('Programming ID and fuses failed.')
                 return False
 
         # Verify programmed data.
         # Behold, my godlike powers of verification:
-        print('Verifying ROM')
+        print('Verifying ROM.')
         pic_rom_data = protocol_interface.read_rom()
         verification_result = True
 
@@ -593,7 +593,7 @@ def program_pic(
             verification_result = False
 
         if chip_info.has_eeprom():
-            print('Verifying EEPROM')
+            print('Verifying EEPROM.')
             pic_eeprom_data = protocol_interface.read_eeprom()
             if pic_eeprom_data == eeprom_data:
                 print('EEPROM verified.')
@@ -607,7 +607,7 @@ def program_pic(
             protocol_interface.program_18fxxxx_fuse(fuse_values)
 
     except InvalidResponseError as e:
-        print('Error: Communication failure.  This may be a bug in this script or a problem with your programmer hardware. ({})'.format(e))
+        print('Error: Communication failure. This may be a bug in this script or a problem with your programmer hardware. ({})'.format(e))
         return False
 
     return verification_result
