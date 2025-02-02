@@ -62,11 +62,17 @@ Command details:
     program             Program PIC chip.
     verify              Verify PIC flash.
     dump                Dump PIC data as binary.
+    erase               Erase PIC.
+    chipinfo            Prints chipinfo as JSON in terminal.
+    hexinfo             Prints information about hexfile.
 
 Usage:
     picpro program -p PORT -i HEX_FILE -t PIC_TYPE [--id=PIC_ID] [--fuse=FUSE_NAME:FUSE_VALUE...] [--icsp]
     picpro verify -p PORT -i HEX_FILE -t PIC_TYPE [--icsp]
-    picpro dump <mem_type> -p PORT -b BIN_FILE -t PIC_TYPE [--icsp] [--binary]
+    picpro erase -p PORT -t PIC_TYPE [--icsp]
+    picpro dump <mem_type> -p PORT -o HEX_FILE -t PIC_TYPE [--icsp] [--binary]
+    picpro chipinfo [<PIC_TYPE>]
+    picpro hexinfo <HEX_FILE> <PIC_TYPE>
     picpro (-h | --help)
 
 
@@ -77,7 +83,7 @@ Options:
     -p PORT --port=PORT              Set serial port where programmer is connected.
     -t PIC_TYPE --pic_type=PIC_TYPE  Pic type you are programming/reading.
     -i HEX_FILE --hex_file=HEX_FILE  Hex file to flash or to read.
-    -b BIN_FILE --bin_file=BIN_FILE  Bin file path.
+    -o HEX_FILE --hex_file=HEX_FILE  Hex file to write.
     --binary                         Input/Output file is in binary.
 
 ```
