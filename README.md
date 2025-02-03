@@ -116,7 +116,7 @@ picpro dump eeprom -p /dev/ttyUSB0 -o eeprom.hex -t 12F675
 ### Example: Dump CONFIG as hex file
 
 ```bash
-picpro dump config -p /dev/ttyUSB0 -o eeprom.hex -t 12F675
+picpro dump config -p /dev/ttyUSB0 -o config.hex -t 12F675
 ```
 
 ### Example: Program chip via ISCP
