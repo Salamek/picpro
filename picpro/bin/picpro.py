@@ -205,7 +205,6 @@ def chipinfo() -> None:
 
     print(json.dumps(data))
 
-
 @command()
 def hexinfo() -> None:
     pic_type = OPTIONS['<PIC_TYPE>']
@@ -267,7 +266,7 @@ def hexinfo() -> None:
             print("{:s}{:s}{{ first: 0x{:08X}, last: 0x{:08X}, length: 0x{:08X} }}".format(INDENT, INLIST, s[0], s[1] - 1, s[1] - s[0]))
     print("")
 
-    # if self.chip_info.programming_vars.rom_size < word_count:  # type: ignore
+    #if self.chip_info.programming_vars.rom_size < word_count:  # type: ignore
     #    raise InvalidValueError('Data too large for PIC ROM {} > {}'.format(word_count, chip_info.programming_vars.rom_size))
     return None
 
@@ -589,7 +588,7 @@ def program_pic(
             no_of_zeros = pic_rom_data.count(b'\x00')
             pic_rom_data_len = len(pic_rom_data)
             if chip_info.programming_vars.flag_calibration_value_in_rom:
-                is_maybe_locked = pic_rom_data_len - 2 == no_of_zeros
+                is_maybe_locked = pic_rom_data_len -2 == no_of_zeros
             else:
                 is_maybe_locked = pic_rom_data_len == no_of_zeros
 
