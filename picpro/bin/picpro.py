@@ -319,6 +319,16 @@ def programmer_common_bootstrap(port: str, pic_type: str, icsp_mode: bool) -> Un
         print('Please check that device is properly connected and working.')
         return None
 
+    # Verify if the programmer protocol is compatible with the protocol
+    # implemented in this software (protocol 'P18A').
+    software_protocol = b'P18A'
+    programmer_protocol_str = protocol_interface.programmer_protocol()
+    print("Checking the protocol of the programmer...")
+    if programmer_protocol_str != software_protocol:
+        exception_msg = "The firmware of the programmer is incompatible with this software."
+        exception_msg += " Update the programmer firmware to use the protocol {}.".format(software_protocol)
+        raise ValueError(exception_msg)
+
     # Get chip info
     chip_info_filename = find_chip_data()
     try:
