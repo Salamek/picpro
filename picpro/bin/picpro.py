@@ -155,7 +155,7 @@ def dump() -> None:
         print('Reading CONFIG into file {}...'.format(output_file))
         content = protocol_interface.read_config()
     else:
-        raise ValueError('Unknown memory type')
+        raise ValueError('Unknown memory type.')
 
     if OPTIONS['--binary']:
         # Binary dump requested
@@ -254,7 +254,7 @@ def hexinfo() -> None:
         elif keys == ['EIP']:
             entry = intel_hex.start_addr['EIP']
         else:
-            raise RuntimeError("unknown 'IntelHex.start_addr' found")
+            raise RuntimeError("Unknown 'IntelHex.start_addr' found.")
         print("{:s}entry: 0x{:08X}".format(INDENT, entry))
     segments = intel_hex.segments()
     if segments:
@@ -263,8 +263,8 @@ def hexinfo() -> None:
             print("{:s}{:s}{{ first: 0x{:08X}, last: 0x{:08X}, length: 0x{:08X} }}".format(INDENT, INLIST, s[0], s[1] - 1, s[1] - s[0]))
     print("")
 
-    # if self.chip_info.programming_vars.rom_size < word_count:  # type: ignore
-    #    raise InvalidValueError('Data too large for PIC ROM {} > {}'.format(word_count, chip_info.programming_vars.rom_size))
+    #if self.chip_info.programming_vars.rom_size < word_count:  # type: ignore
+    #    raise InvalidValueError('Data too large for PIC ROM {} > {}.'.format(word_count, chip_info.programming_vars.rom_size))
     return None
 
 
@@ -286,7 +286,7 @@ def find_chip_data() -> str:
     chip_data_files = [f for f in path_list if os.path.exists(f)]
 
     if len(chip_data_files) == 0:
-        raise ValueError('chipdata.cid was not found in any search path')
+        raise ValueError("File 'chipdata.cid' was not found in any search path.")
 
     return chip_data_files[0]
 
@@ -418,7 +418,7 @@ def prepare_flash_data_from_hex_file(
                         swap_bytes = True
                         break
                     if not (le_ok or be_ok):
-                        raise ValueError('Invalid ROM word: {}, ROM blank: {}'.format(hex(le_word), hex(rom_blank_word)))
+                        raise ValueError('Invalid ROM word: {}, ROM blank: {}.'.format(hex(le_word), hex(rom_blank_word)))
             if swap_bytes is not None:
                 break
 

@@ -103,7 +103,7 @@ class ChipInfoEntry(IChipInfoEntry):
 
         core_type_int = self._core_type_dict.get(self.core_type)
         if not core_type_int:
-            raise ValueError('Failed to identify core_type')
+            raise ValueError('Failed to identify core_type.')
 
         return ProgrammingVars(
             rom_size=self.rom_size,
@@ -131,7 +131,7 @@ class ChipInfoEntry(IChipInfoEntry):
         if self.core_type in ['bit12_a', 'bit12_b']:
             return 12
 
-        raise ValueError('Failed to detect core bits')
+        raise ValueError('Failed to detect core bits.')
 
     def decode_fuse_data(self, fuse_values: list) -> dict:
         """Given a list of fuse values, return a dict of symbolic
