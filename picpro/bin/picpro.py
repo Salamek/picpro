@@ -201,6 +201,7 @@ def chipinfo() -> None:
 
     print(json.dumps(data))
 
+
 @command()
 def hexinfo() -> None:
     pic_type = OPTIONS['<PIC_TYPE>']
@@ -583,7 +584,7 @@ def program_pic(
             no_of_zeros = pic_rom_data.count(b'\x00')
             pic_rom_data_len = len(pic_rom_data)
             if chip_info.programming_vars.flag_calibration_value_in_rom:
-                is_maybe_locked = pic_rom_data_len -2 == no_of_zeros
+                is_maybe_locked = pic_rom_data_len - 2 == no_of_zeros
             else:
                 is_maybe_locked = pic_rom_data_len == no_of_zeros
 

@@ -7,11 +7,13 @@ This is complete rewrite of kitsrus_pic_programmer into Python 3 + bunch of fixe
 ## Supported kitsrus programmers
 
 * K128
-* K149-A
-* K149-B
+* K149 version A to F
 * K150 (Tested)
+* K182
 
-See <http://www.kitsrus.com/pic.html>
+**Note:** The programmer must have the latest firmware version, which utilizes the P18A protocol. Firmware versions using older protocols (P018, P016, P014, or earlier) are not supported.
+
+See <https://www.kitsrus.com/pic.html>.
 
 ## Installation
 
