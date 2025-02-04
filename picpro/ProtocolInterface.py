@@ -281,7 +281,7 @@ class ProtocolInterface:
         cmd = 9
         self._need_chip_info()
 
-        core_bits = self.chip_info.get_core_bits() # type: ignore
+        core_bits = self.chip_info.get_core_bits()  # type: ignore
         if core_bits == 16:
             if len(pic_id) != 8:
                 raise InvalidValueError('Should have 8-byte ID for 16 bit core.')
