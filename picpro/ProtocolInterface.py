@@ -43,15 +43,15 @@ class ProtocolInterface:
         """Raise an exception if the expected response byte is not sent by the PIC programmer before timeout."""
         response = self._read(len(expected), timeout=timeout)
         if response != expected:
-            raise InvalidResponseError('expected "{!r}" received {!r}'.format(expected, response))
+            raise InvalidResponseError('Expected "{!r}", received {!r}.'.format(expected, response))
 
     def _need_chip_info(self) -> None:
         if not self.chip_info:
-            raise InvalidCommandSequenceError('Chip info is not set')
+            raise InvalidCommandSequenceError('Chip info is not set.')
 
     def _need_fuses(self) -> None:
         if not self.fuses_set:
-            raise InvalidCommandSequenceError('Fuses not set')
+            raise InvalidCommandSequenceError('Fuses not set.')
 
     def reset(self) -> bool:
         """Resets the PIC Programmer's on-board controller."""
@@ -213,7 +213,7 @@ class ProtocolInterface:
         word_count = len(data) // 2
         rom_size = self.chip_info.programming_vars.rom_size  # type: ignore
         if rom_size < word_count:
-            raise InvalidValueError('Data too large for PIC ROM {} > {}'.format(word_count, rom_size))
+            raise InvalidValueError('Data too large for PIC ROM {} > {}.'.format(word_count, rom_size))
 
         if ((word_count * 2) % 32) != 0:
             raise InvalidValueError('ROM data must be a multiple of 32 bytes in size.')
@@ -248,7 +248,7 @@ class ProtocolInterface:
 
         byte_count = len(data)
         if self.chip_info.programming_vars.eeprom_size < byte_count:  # type: ignore
-            raise InvalidValueError('Data too large for PIC EEPROM')
+            raise InvalidValueError('Data too large for PIC EEPROM.')
 
         if (byte_count % 2) != 0:
             raise InvalidValueError('EEPROM data must be a multiple of 2 bytes in size.')
@@ -385,7 +385,7 @@ class ProtocolInterface:
         self.port.write(cmd.to_bytes(1, 'little'))
         ack = self._read(1)
         if ack != b'C':
-            raise InvalidResponseError('No acknowledgement from read_config()')
+            raise InvalidResponseError('No acknowledgement from read_config().')
         response = self._read(26)
         self._set_programming_voltages_command(False)
         self._command_end()
@@ -431,9 +431,9 @@ class ProtocolInterface:
                 return False
             if response == b'B':
                 if expected_b_bytes <= 0:
-                    raise InvalidResponseError('Received wrong number of "B" bytes in rom_is_blank()')
+                    raise InvalidResponseError('Received wrong number of "B" bytes in rom_is_blank().')
             else:
-                raise InvalidResponseError('Unexpected byte in rom_is_blank(): {!r}'.format(response))
+                raise InvalidResponseError('Unexpected byte in rom_is_blank(): {!r}.'.format(response))
 
     def eeprom_is_blank(self) -> bool:
         """Returns True if PIC EEPROM is blank."""
@@ -442,7 +442,7 @@ class ProtocolInterface:
         response = self._read(1)
         self._command_end()
         if response not in [b'Y', b'N']:
-            raise InvalidResponseError('Unexpected response in eeprom_is_blank(): {!r}'.format(response))
+            raise InvalidResponseError('Unexpected response in eeprom_is_blank(): {!r}.'.format(response))
 
         return response == b'Y'
 
@@ -518,7 +518,7 @@ class ProtocolInterface:
         self._command_end()
 
         if response not in [b'Y', b'N']:
-            raise InvalidResponseError('Unexpected response in program_debug_vector(): {!r}'.format(response))
+            raise InvalidResponseError('Unexpected response in program_debug_vector(): {!r}.'.format(response))
 
         return response == b'Y'
 

@@ -122,7 +122,7 @@ class ChipInfoReader:
             lhs_raw, rhs = match_assignment_regexp.groups()
             lhs = self.chip_info_key_replacements.get(lhs_raw)
             if lhs is None:
-                raise FormatError('Key replacement is None for {}'.format(lhs_raw))
+                raise FormatError('Key replacement is None for {}.'.format(lhs_raw))
             try:
                 found_special_handler = self.special_handlers.get(lhs)
                 if found_special_handler:
@@ -131,7 +131,7 @@ class ChipInfoReader:
                     block[lhs] = rhs
             except NameError as e:
                 # Some extraneous line in the file...  do we care?
-                raise FormatError('Assignment outside of chip definition @{}: {}'.format(line_number, line)) from e
+                raise FormatError('Assignment outside of chip definition @{}: {}.'.format(line_number, line)) from e
 
         else:
             match_fuse_list_regexp = self.fuse_list_regexp.match(line)
@@ -153,7 +153,7 @@ class ChipInfoReader:
 
                 block['fuses'][name] = fuses
             elif self.non_blank_regexp.match(line):
-                raise FormatError('Unrecognized line format {}'.format(line))
+                raise FormatError('Unrecognized line format {}.'.format(line))
 
     def get_chip(self, name: str) -> ChipInfoEntry:
         return self.chip_entries[name.lower()]
