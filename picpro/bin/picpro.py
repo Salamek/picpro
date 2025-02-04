@@ -181,10 +181,14 @@ def erase() -> None:
     if not programmer_common_data:
         return
 
-    _, protocol_interface = programmer_common_data
-    print('Erasing chip...')
-    protocol_interface.erase_chip()
-    print('Done!')
+    chip_info, protocol_interface = programmer_common_data
+
+    if chip_info.programming_vars.flash_chip:
+        print('Erasing chip...')
+        protocol_interface.erase_chip()
+        print('Done!')
+    else:
+        print('This chip is not erasable.')
 
 
 @command()
@@ -548,10 +552,11 @@ def program_pic(
 
         if is_program:
             # Write ROM, EEPROM, ID and fuses
-            print('Erasing chip.')
-            if not protocol_interface.erase_chip():
-                print('Erasure failed.')
-                return False
+            if chip_info.programming_vars.flash_chip:
+                print('Erasing chip.')
+                if not protocol_interface.erase_chip():
+                    print('Erasure failed.')
+                    return False
 
             protocol_interface.cycle_programming_voltages()
 

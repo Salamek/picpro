@@ -17,3 +17,4 @@ class ProgrammingVars:
     program_retries: int
     over_program: int
     fuse_blank: List[int]
+    flash_chip: bool
