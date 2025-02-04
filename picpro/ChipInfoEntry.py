@@ -120,6 +120,7 @@ class ChipInfoEntry(IChipInfoEntry):
             program_retries=self.program_tries,
             over_program=self.over_program,
             fuse_blank=self.fuse_blank,
+            flash_chip=self.flash_chip,
         )
 
     def get_core_bits(self) -> int:

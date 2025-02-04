@@ -78,7 +78,8 @@ def test_get_chip_programing_vars(chip_data_path: str) -> None:
         erase_mode=3,
         program_retries=1,
         over_program=0,
-        fuse_blank=[16383, 16383]
+        fuse_blank=[16383, 16383],
+        flash_chip=True
     )
 
     chip_info = chip_info_reader.get_chip('16f737')
