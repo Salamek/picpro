@@ -1,26 +1,22 @@
-import os
 import pytest
+from pathlib import Path
+
+from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.ChipInfoReader import ChipInfoReader
-from picpro.ProgrammingVars import ProgrammingVars
+from picpro.ProgrammingVariables import ProgrammingVariables
+from picpro.exceptions import FuseError
 
 
-@pytest.fixture(scope="function")  # type: ignore
-def chip_data_path() -> str:
-    this_dir = os.path.dirname(os.path.realpath(__file__))
-    return os.path.join(this_dir, 'test_chip_data.cid')
-
-
-def test_be_constructed_with(chip_data_path: str) -> None:
+def test_be_constructed_with(chip_data_path: Path) -> None:
     ChipInfoReader(chip_data_path)
 
 
 def test_not_file() -> None:
     with pytest.raises(FileNotFoundError):
-        ChipInfoReader('Muhehe')
+        ChipInfoReader(Path('Muhehe'))
 
 
-def test_get_chip(chip_data_path: str) -> None:
-    chip_info_reader = ChipInfoReader(chip_data_path)
+def test_get_chip(chip_info_reader: ChipInfoReader) -> None:
 
     expect = {
         'chip_name': '10f200',
@@ -62,10 +58,9 @@ def test_get_chip(chip_data_path: str) -> None:
     assert chip_info.to_dict() == expect
 
 
-def test_get_chip_programing_vars(chip_data_path: str) -> None:
-    chip_info_reader = ChipInfoReader(chip_data_path)
+def test_get_chip_programing_vars(chip_info_reader: ChipInfoReader) -> None:
 
-    expect = ProgrammingVars(
+    expect = ProgrammingVariables(
         rom_size=4096,
         eeprom_size=0,
         core_type=7,
@@ -86,9 +81,8 @@ def test_get_chip_programing_vars(chip_data_path: str) -> None:
     assert chip_info.programming_vars == expect
 
 
-def test_get_chip_multiple_fuses(chip_data_path: str) -> None:
-    chip_info_reader = ChipInfoReader(chip_data_path)
-
+def test_get_chip_multiple_fuses(chip_info_reader: ChipInfoReader) -> None:
+    chip_info_entry = chip_info_reader.get_chip('16f737')
     expect = {
         'chip_name': '16f737',
         'include': True,
@@ -162,6 +156,76 @@ def test_get_chip_multiple_fuses(chip_data_path: str) -> None:
         'over_program': 0
     }
 
-    chip_info = chip_info_reader.get_chip('16F737')
+    assert chip_info_entry.to_dict() == expect
 
-    assert chip_info.to_dict() == expect
+
+def test_has_eeprom(chip_info_entry: ChipInfoEntry) -> None:
+    assert chip_info_entry.has_eeprom == True
+
+
+def test_pin1_location_text(chip_info_entry: ChipInfoEntry) -> None:
+    assert chip_info_entry.pin1_location_text == 'socket pin 13'
+
+
+def test_fuse_doc(chip_info_entry: ChipInfoEntry) -> None:
+    expected = """'WDT' : ('Enabled', 'Disabled')
+'PWRTE' : ('Disabled', 'Enabled')
+'MCLRE' : ('Enabled', 'Disabled')
+'BODEN' : ('Enabled', 'Disabled')
+'Code Protect ROM' : ('Disabled', 'Enabled')
+'Code Protect EEP' : ('Disabled', 'Enabled')
+'Bandgap' : ('Highest', 'Mid High', 'Mid Low', 'Lowest')
+'Oscillator' : ('RC CLKGP4 RCGP5', 'RC IOGP4 RCGP5', 'INTOSC CLKGP4 IOGP5', 'INTOSC IOGP4 IOGP5', 'EC IOGP4 CLKINGP5', 'HS', 'XT', 'LP')
+"""
+    assert chip_info_entry.fuse_doc == expected
+
+
+def test_decode_fuse_data(chip_info_entry: ChipInfoEntry) -> None:
+    expected = {
+        'BODEN': 'Enabled',
+        'Bandgap': 'Highest',
+        'Code Protect EEP': 'Disabled',
+        'Code Protect ROM': 'Disabled',
+        'MCLRE': 'Enabled',
+        'Oscillator': 'RC CLKGP4 RCGP5',
+        'PWRTE': 'Disabled',
+        'WDT': 'Enabled'
+    }
+    assert chip_info_entry.decode_fuse_data([12799, 16383, 16383, 65535, 65535, 65535, 65535]) == expected
+
+
+def test_decode_fuse_data_bad(chip_info_entry: ChipInfoEntry) -> None:
+    with pytest.raises(FuseError):
+        chip_info_entry.decode_fuse_data([99999])
+
+def test_encode_fuse_data(chip_info_entry: ChipInfoEntry) -> None:
+    fuse_data = {
+        'BODEN': 'Enabled',
+        'Bandgap': 'Highest',
+        'Code Protect EEP': 'Disabled',
+        'Code Protect ROM': 'Disabled',
+        'MCLRE': 'Enabled',
+        'Oscillator': 'RC CLKGP4 RCGP5',
+        'PWRTE': 'Disabled',
+        'WDT': 'Enabled'
+    }
+
+    expected = [12799]
+    assert chip_info_entry.encode_fuse_data(fuse_data) == expected
+
+def test_encode_fuse_data_bad_fuse(chip_info_entry: ChipInfoEntry) -> None:
+    fuse_data = {
+        'BlaBla': 'Enabled',
+    }
+
+    with pytest.raises(FuseError):
+        chip_info_entry.encode_fuse_data(fuse_data)
+
+
+def test_encode_fuse_data_bad_settings(chip_info_entry: ChipInfoEntry) -> None:
+    fuse_data = {
+        'BODEN': 'BlaBla',
+    }
+
+    with pytest.raises(FuseError):
+        chip_info_entry.encode_fuse_data(fuse_data)

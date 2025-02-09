@@ -1,12 +1,12 @@
 import re
 import struct
-
+from pathlib import Path
 from picpro.exceptions import InvalidRecordError, InvalidChecksumError
 
 
 class HexFileReader:
-    def __init__(self, file_name: str):
-        with open(file_name, 'r', encoding='ascii') as file:
+    def __init__(self, file_path: Path):
+        with file_path.open('r', encoding='ascii') as file:
             seg_address = 0
             ext_address = 0
             self.records = []
