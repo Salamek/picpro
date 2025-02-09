@@ -1,6 +1,6 @@
 import dataclasses
-from picpro.IChipInfoEntry import IChipInfoEntry
-from picpro.ProgrammingVars import ProgrammingVars
+import functools
+from picpro.ProgrammingVariables import ProgrammingVariables
 from picpro.exceptions import FuseError
 from picpro.tools import indexwise_and
 
@@ -97,15 +97,15 @@ class ChipInfoEntry:
             'fuses': self.fuses
         }
 
-    @property
-    def programming_vars(self) -> ProgrammingVars:
+    @functools.cached_property
+    def programming_vars(self) -> ProgrammingVariables:
         """Returns a ProgrammingVars"""
 
         core_type_int = self._core_type_dict.get(self.core_type)
         if not core_type_int:
             raise ValueError('Failed to identify core_type.')
 
-        return ProgrammingVars(
+        return ProgrammingVariables(
             rom_size=self.rom_size,
             eeprom_size=self.eeprom_size,
             core_type=core_type_int,
