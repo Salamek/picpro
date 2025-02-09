@@ -122,7 +122,8 @@ class ChipInfoEntry(IChipInfoEntry):
             fuse_blank=self.fuse_blank,
         )
 
-    def get_core_bits(self) -> int:
+    @functools.cached_property
+    def core_bits(self) -> int:
 
         if self.core_type in ['bit16_a', 'bit16_b', 'bit16_c']:
             return 16
@@ -185,12 +186,15 @@ class ChipInfoEntry(IChipInfoEntry):
 
         return result
 
+    @property
     def has_eeprom(self) -> bool:
         return self.eeprom_size != 0
 
+    @property
     def pin1_location_text(self) -> str:
         return self._socket_image_dict[self.socket_image]
 
+    @property
     def fuse_doc(self) -> str:
         result = ''
         fuse_param_list = self.fuses
