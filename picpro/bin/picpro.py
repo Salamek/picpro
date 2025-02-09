@@ -11,9 +11,10 @@ Command details:
     verify              Verify PIC flash.
     dump                Dump PIC data as binary.
     erase               Erase PIC.
-    chip_info            Prints chip info as JSON in terminal.
-    hex_info             Prints information about hexfile.
-    programmer_info      Print information about your programmer.
+    chip_info           Prints chip info as JSON in terminal.
+    hex_info            Prints information about hexfile.
+    programmer_info     Print information about your programmer.
+    read_chip_config    Read config from chip.
 
 Usage:
     picpro program -p PORT -i HEX_FILE -t PIC_TYPE [--id=PIC_ID] [--fuse=FUSE_NAME:FUSE_VALUE...] [--icsp]
@@ -21,8 +22,10 @@ Usage:
     picpro erase -p PORT -t PIC_TYPE [--icsp]
     picpro dump <mem_type> -p PORT -o HEX_FILE -t PIC_TYPE [--icsp] [--binary]
     picpro chip_info [<PIC_TYPE>]
+    picpro read_chip_config -p PORT -t PIC_TYPE [--icsp]
     picpro hex_info <HEX_FILE> <PIC_TYPE>
     picpro programmer_info -p PORT
+    picpro decode_fuses <fuses> -t PIC_TYPE
     picpro (-h | --help)
 
 
@@ -44,6 +47,7 @@ import json
 from functools import wraps
 from typing import Optional, Callable
 from pathlib import Path
+
 from intelhex import IntelHex
 from docopt import docopt
 from picpro.ChipInfoReader import ChipInfoReader
@@ -51,6 +55,7 @@ from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.FlashData import FlashData
 from picpro.HexFileReader import HexFileReader
 from picpro.exceptions import FuseError, InvalidResponseError
+from picpro.protocol.ChipConfig import ChipConfig
 from picpro.protocol.IProgrammingInterface import IProgrammingInterface
 from picpro.tools import swab_bytes
 from picpro.protocol.p18a.Connection import Connection
@@ -162,6 +167,14 @@ def _verify_pipeline(
     return verification_result
 
 
+def _print_chip_config(chip_config: ChipConfig, chip_info_entry: ChipInfoEntry):
+    print('Chip ID: {} ({})'.format(chip_config.chip_id, hex(chip_config.chip_id)))
+    print('ID:      {}'.format(chip_config.id.hex()))
+    print('CAL:     {}'.format(chip_config.calibrate))
+    print('Fuses:')
+    for name, value in chip_info_entry.decode_fuse_data(chip_config.fuses).items():
+        print('    {} = {}'.format(name, value))
+
 @command()
 def program() -> None:
     fuses = {}
@@ -184,7 +197,8 @@ def program() -> None:
                         icsp_mode=OPTIONS['--icsp']
                 ) as programming_interface:
                     chip_config = programming_interface.read_config()
-                    print('Chip config: {}'.format(chip_config))
+                    print('==== Chip info ====')
+                    _print_chip_config(chip_config, chip_info_entry)
                     if chip_info_entry.cal_word:
                         # Some chips have cal data put on last two bytes of ROM dump
                         print('CAL is in ROM data, patching ROM to contain the same CAL data...')
@@ -405,7 +419,38 @@ def programmer_info() -> None:
         print('Unable to initialize connection to programmer. {}'.format(e))
         print('Please check that device is properly connected and working.')
 
+@command()
+def decode_fuses() -> None:
+    pic_type = OPTIONS['--pic_type']
+    fuses = [int (f) for f in OPTIONS['<fuses>'].split()]
+    # Get chip info
+    chip_info_filename = _find_chip_data()
+    chip_info_reader = ChipInfoReader(chip_info_filename)
 
+    chip_info_entry = chip_info_reader.get_chip(pic_type)
+    print(chip_info_entry.decode_fuse_data(fuses))
+
+
+@command()
+def read_chip_config() -> None:
+    try:
+        chip_info_reader = ChipInfoReader(_find_chip_data())
+        chip_info_entry = chip_info_reader.get_chip(OPTIONS['--pic_type'])
+        print('Opening connection to programmer...')
+        with Connection(OPTIONS['--port']) as connection:
+            print('Initializing programming interface...')
+            with connection.get_programming_interface(
+                    chip_info_entry,
+                    icsp_mode=OPTIONS['--icsp']
+            ) as programming_interface:
+                chip_config = programming_interface.read_config()
+                _print_chip_config(chip_config, chip_info_entry)
+
+                print('Done!')
+    except IOError:
+        print('Unable to locate chipinfo.cid file.')
+        print('Please verify that file is present in the same directory as this script, '
+              'and that the filename is in lowercase characters, and that you have access to read the file.')
 
 def main() -> None:
     signal.signal(signal.SIGINT, lambda _signal, _frame: sys.exit(0))  # Properly handle Control+C
