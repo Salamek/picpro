@@ -167,7 +167,7 @@ def _verify_pipeline(
     return verification_result
 
 
-def _print_chip_config(chip_config: ChipConfig, chip_info_entry: ChipInfoEntry):
+def _print_chip_config(chip_config: ChipConfig, chip_info_entry: ChipInfoEntry) -> None:
     print('Chip ID: {} ({})'.format(chip_config.chip_id, hex(chip_config.chip_id)))
     print('ID:      {}'.format(chip_config.id.hex()))
     print('CAL:     {}'.format(chip_config.calibrate))
