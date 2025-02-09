@@ -20,7 +20,7 @@ def swab_bytes(to_swab: bytes) -> bytearray:
     return result
 
 
-def swab_record(record: list) -> Tuple[int, bytearray]:
+def swab_record(record: Tuple[int, bytes]) -> Tuple[int, bytearray]:
     """Given a record from a hex file, return a new copy with adjacent data bytes swapped."""
     # result = bytearray()
     # for x in range(0, len(record[1]), 2):
