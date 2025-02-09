@@ -1,5 +1,5 @@
 import struct
-from typing import Optional, Tuple, List, Union
+from typing import Optional, Tuple, List
 
 from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.HexFileReader import HexFileReader
@@ -91,7 +91,7 @@ class FlashData:
         pick_byte = 0 if swap_bytes else 1
         self.eeprom_records = [
             (int(0x4200 + ((rec[0] - 0x4200) / 2)),
-             bytearray([rec[1][i] for i in range(pick_byte, len(rec[1]), 2)]))
+             bytes([rec[1][i] for i in range(pick_byte, len(rec[1]), 2)]))
             for rec in self.eeprom_records
         ]
 
@@ -120,7 +120,7 @@ class FlashData:
         return merge_records(self.eeprom_records, self.eeprom_blank, 0x4200)
 
     @property
-    def id_data(self) -> Union[bytearray, bytes]:  #@TODO migrate to bytes everywhere if possible
+    def id_data(self) -> bytes:
         if self.pic_id:
             return self.pic_id.encode('UTF-8')
         if self.core_bits == 16:
@@ -128,7 +128,7 @@ class FlashData:
         else:
             id_data_raw = range_filter_records(self.config_records, 0x4000, 0x4008)
         id_data = merge_records(id_data_raw, b'\x00' * 8, 0x100000 if self.core_bits == 16 else 0x4000)
-        return id_data if self.core_bits == 16 else bytearray([id_data[x] for x in range(1, 8, 2)])
+        return id_data if self.core_bits == 16 else bytes([id_data[x] for x in range(1, 8, 2)])
 
     @property
     def fuse_data(self) -> List[int]:  #@TODO migrate to bytes

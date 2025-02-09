@@ -24,7 +24,7 @@ class HexFileReader:
                     length = int(length_str, 16)
                     address = int(address_str, 16)
                     record_type = int(type_str, 16)
-                    data = bytearray.fromhex(data_str)
+                    data = bytes.fromhex(data_str)
                     checksum = int(checksum_str, 16)
 
                     if length != len(data):
