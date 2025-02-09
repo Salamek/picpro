@@ -6,7 +6,7 @@ from picpro.tools import indexwise_and
 
 
 @dataclasses.dataclass
-class ChipInfoEntry(IChipInfoEntry):
+class ChipInfoEntry:
     """A single entry from a chipinfo file, with methods for feeding data to protocol_interface."""
 
     chip_name: str
