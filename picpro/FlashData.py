@@ -122,7 +122,7 @@ class FlashData:
     @property
     def id_data(self) -> bytes:
         if self.pic_id:
-            return self.pic_id.encode('UTF-8')
+            return bytes.fromhex(self.pic_id)
         if self.core_bits == 16:
             id_data_raw = range_filter_records(self.id_records, 0x100000, 0x100008)
         else:
