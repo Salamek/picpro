@@ -82,7 +82,8 @@ class ProgrammingInterface(IProgrammingInterface):
         self.connection.expect(expect)
 
     def close(self) -> None:
-        # @TODO, how to reset programming _init_programming_vars
+        # Looks like this is not needed?
+        # Calling _init_programming_vars does this and there is nothing to clean up
         pass
 
     def cycle_programming_voltages(self) -> None:
