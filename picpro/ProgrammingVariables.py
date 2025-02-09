@@ -3,7 +3,7 @@ from typing import List
 
 
 @dataclasses.dataclass
-class ProgrammingVars:
+class ProgrammingVariables:
     rom_size: int
     eeprom_size: int
     core_type: int

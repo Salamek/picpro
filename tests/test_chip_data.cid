@@ -48,3 +48,31 @@ LIST7 FUSE1 "Code Protect" "Disabled"=3FFF "Enabled"=1FFF
 LIST8 FUSE1 "Oscillator" "EXTRC_CLKOUT"=3FFF "EXTRC_IO"=3FFE "INTRC_CLKOUT"=3FFD "INTRC_IO"=3FFC "EXTCLK"=3FEF "HS"=3FEE "XT"=3FED "LP"=3FEC
 LIST9 FUSE2 "Clock Monitor" "Enabled"=3FFF "Disabled"=3FFE
 LIST10 FUSE2 "Int/Ext Switch" "Enabled"=3FFF "Disabled"=3FFD
+
+
+CHIPname=12F675
+INCLUDE=Y
+KITSRUS.COM=8pin
+EraseMode=2
+FlashChip=Y
+PowerSequence=Vpp2Vcc
+ProgramDelay=80
+ProgramFlag2=1
+PanelSizing=0
+CoreType=bit14_B
+ROMsize=000400
+EEPROMsize=00000080
+FUSEblank=31FF
+CPwarn=N
+CALword=Y
+BandGap=Y
+ICSPonly=N
+ChipID=0FC0
+LIST1 FUSE1 "WDT" "Enabled"=3FFF "Disabled"=3FF7
+LIST2 FUSE1 "PWRTE" "Disabled"=3FFF "Enabled"=3FEF
+LIST3 FUSE1 "MCLRE" "Enabled"=3FFF "Disabled"=3FDF
+LIST4 FUSE1 "BODEN" "Enabled"=3FFF "Disabled"=3FBF
+LIST5 FUSE1 "Code Protect ROM" "Disabled"=3FFF "Enabled"=3F7F
+LIST6 FUSE1 "Code Protect EEP" "Disabled"=3FFF "Enabled"=3EFF
+LIST7 FUSE1 "Bandgap" "Highest"=3FFF "Mid High"=2FFF  "Mid Low"=1FFF "Lowest"=0FFF
+LIST8 FUSE1 "Oscillator" "RC CLKGP4 RCGP5"=3FFF "RC IOGP4 RCGP5"=3FFE "INTOSC CLKGP4 IOGP5"=3FFD "INTOSC IOGP4 IOGP5"=3FFC "EC IOGP4 CLKINGP5"=3FFB "HS"=3FFA "XT"=3FF9 "LP"=3FF8
