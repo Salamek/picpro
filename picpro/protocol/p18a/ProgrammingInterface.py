@@ -276,13 +276,7 @@ class ProgrammingInterface(IProgrammingInterface):
         self.set_programming_voltages_command(False)
         self.connection.command_end()
 
-        config = struct.unpack('<HccccccccHHHHHHHH', response)
-        return ChipConfig(
-            chip_id=config[0],
-            id=b''.join(config[1:9]),
-            fuses=list(config[9:16]),
-            calibrate=config[16]
-        )
+        return ChipConfig.from_bytes(response)
 
     def erase_chip(self) -> None:
         """Erases all data from chip."""

@@ -273,9 +273,7 @@ def dump() -> None:
                     content = swab_bytes(programming_interface.read_rom())
                 elif mem_type == 'config':
                     print('Reading CONFIG into file {}...'.format(output_file))
-                    # @TODO implement ChipConfig.to_bytes()/from_bytes()
-                    raise NotImplementedError
-                    # content = programming_interface.read_config()
+                    content = programming_interface.read_config().to_bytes()
                 else:
                     raise ValueError('Unknown memory type.')
 
@@ -398,7 +396,7 @@ def programmer_info() -> None:
     port = OPTIONS['--port']
     try:
         with Connection(port) as connection:
-            print('Firmware version: {}'.format(connection.programmer_firmware_version().decode('UTF-8')))
+            print('Firmware version: {}'.format(connection.programmer_version().decode('UTF-8')))
             print('Protocol version: {}'.format(connection.programmer_protocol().decode('UTF-8')))
     except ConnectionError:
         print('Unable to open serial port "{}".'.format(port))
