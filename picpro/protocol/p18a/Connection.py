@@ -29,7 +29,7 @@ class Connection(IConnection):
         self.expect(b'Y', timeout=None, send_command_end=True)
 
 
-    def programmer_firmware_version(self) -> bytes:
+    def programmer_version(self) -> bytes:
         """Returns the PIC programmer's numeric version.
         K128     = 0  (Byte)
         K149-A   = 1  (Byte)

@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
 
 class IConnection:
+    detected_programmer_version: int
     def __init__(self, port: str):
         try:
             self.serial_connection = serial.Serial(
@@ -108,9 +109,12 @@ class IConnection:
             result = response[0].to_bytes(1, 'little') == b'B'
         else:
             result = False
-        if result and len(response) == 2:
-            pass  # @TODO
-            # self.firmware_type = response[1]
+
+        if not result:
+            raise InvalidResponseError
+
+        if len(response) == 2:
+            self.detected_programmer_version = response[1]
         return result
 
     def echo(self, msg: bytes = b'X') -> bytes:
@@ -136,8 +140,13 @@ class IConnection:
         """Blocks until chip is removed from programming socket."""
         raise NotImplementedError
 
-    def programmer_firmware_version(self) -> bytes:
-        """Returns the PIC programmer's numeric firmware version."""
+    def programmer_version(self) -> bytes:
+        """Returns the PIC programmer's numeric version.
+        K128     = 0  (Byte)
+        K149-A   = 1  (Byte)
+        K149-B   = 2  (Byte)
+        K150     = 3  (Byte)
+        """
         raise NotImplementedError
 
     def programmer_protocol(self) -> bytes:
