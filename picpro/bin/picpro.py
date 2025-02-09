@@ -224,8 +224,8 @@ def program() -> None:
                     print('Programming ID and fuses.')
                     fuse_transaction = programming_interface.program_id_fuses(flash_data.id_data, flash_data.fuse_data)
 
-                    verify_result = _verify_pipeline(programming_interface, chip_info_entry, flash_data)
-                    if fuse_transaction and verify_result:
+                    _verify_pipeline(programming_interface, chip_info_entry, flash_data)
+                    if fuse_transaction:
                         print('Committing 18Fxxxx fuse data.')
                         fuse_transaction.program_18fxxxx_fuse(flash_data.fuse_data)
                     print('Done!')
