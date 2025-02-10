@@ -18,7 +18,6 @@ class Connection(IConnection):
 
         self.expect(b'Y', timeout=None, send_command_end=True)
 
-
     def wait_until_chip_out_of_socket(self) -> None:
         """Blocks until chip is removed from programming socket."""
         cmd = 19
@@ -27,7 +26,6 @@ class Connection(IConnection):
         self.expect(b'A')
 
         self.expect(b'Y', timeout=None, send_command_end=True)
-
 
     def programmer_version(self) -> bytes:
         """Returns the PIC programmer's numeric version.
@@ -52,7 +50,6 @@ class Connection(IConnection):
         response = self.read(4)
         self.command_end()
         return response
-
 
     def get_programming_interface(self, chip_info: ChipInfoEntry, icsp_mode: bool = False) -> IProgrammingInterface:
         return ProgrammingInterface(self, chip_info, icsp_mode)
