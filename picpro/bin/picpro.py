@@ -175,6 +175,7 @@ def _print_chip_config(chip_config: ChipConfig, chip_info_entry: ChipInfoEntry) 
     for name, value in chip_info_entry.decode_fuse_data(chip_config.fuses).items():
         print('    {} = {}'.format(name, value))
 
+
 @command()
 def program() -> None:
     fuses = {}
@@ -405,6 +406,7 @@ def hex_info() -> None:
     #    raise InvalidValueError('Data too large for PIC ROM {} > {}.'.format(word_count, chip_info.programming_vars.rom_size))
     return None
 
+
 @command()
 def programmer_info() -> None:
     port = OPTIONS['--port']
@@ -419,10 +421,11 @@ def programmer_info() -> None:
         print('Unable to initialize connection to programmer. {}'.format(e))
         print('Please check that device is properly connected and working.')
 
+
 @command()
 def decode_fuses() -> None:
     pic_type = OPTIONS['--pic_type']
-    fuses = [int (f) for f in OPTIONS['<fuses>'].split()]
+    fuses = [int(f) for f in OPTIONS['<fuses>'].split()]
     # Get chip info
     chip_info_filename = _find_chip_data()
     chip_info_reader = ChipInfoReader(chip_info_filename)
@@ -451,6 +454,7 @@ def read_chip_config() -> None:
         print('Unable to locate chipinfo.cid file.')
         print('Please verify that file is present in the same directory as this script, '
               'and that the filename is in lowercase characters, and that you have access to read the file.')
+
 
 def main() -> None:
     signal.signal(signal.SIGINT, lambda _signal, _frame: sys.exit(0))  # Properly handle Control+C

@@ -131,7 +131,7 @@ class FlashData:
         return id_data if self.core_bits == 16 else bytes([id_data[x] for x in range(1, 8, 2)])
 
     @property
-    def fuse_data(self) -> List[int]:  #@TODO migrate to bytes
+    def fuse_data(self) -> List[int]:  # @TODO migrate to bytes
         fuse_data_blank = b''.join(map(lambda word: struct.pack('>H', word), self.chip_info.fuse_blank))
         if self.core_bits == 16:
             fuse_config = range_filter_records(self.config_records, 0x300000, 0x30000e)

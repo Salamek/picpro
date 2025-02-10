@@ -5,6 +5,7 @@ from picpro.protocol.IFuseTransaction import IFuseTransaction
 from picpro.exceptions import InvalidResponseError, InvalidValueError
 from picpro.protocol.ChipConfig import ChipConfig
 
+
 class FuseTransaction(IFuseTransaction):
     def program_18fxxxx_fuse(self, fuses: List[int]) -> None:
         """Commits fuse values previously loaded using program_id_fuses()"""
@@ -66,7 +67,6 @@ class ProgrammingInterface(IProgrammingInterface):
         self.connection.serial_connection.write(command_payload)
         self.connection.expect(b'I', send_command_end=True)
 
-
     def set_programming_voltages_command(self, on: bool) -> None:
         """Turn the PIC programming voltages on or off.  Must be called as part of other commands which read or write PIC data."""
         cmd_on = 4
@@ -90,7 +90,6 @@ class ProgrammingInterface(IProgrammingInterface):
         cmd = 6
         self.connection.command_start(cmd)
         self.connection.expect(b'V', send_command_end=True)
-
 
     def program_rom(self, data: bytes) -> None:
         """Write data to ROM.  data should be a binary string of data, high byte first."""
@@ -125,7 +124,6 @@ class ProgrammingInterface(IProgrammingInterface):
 
         self.set_programming_voltages_command(False)
         self.connection.command_end()
-
 
     def program_eeprom(self, data: bytes) -> None:
         """Write data to EEPROM.  Data size must be small enough to fit in EEPROM."""
@@ -200,7 +198,6 @@ class ProgrammingInterface(IProgrammingInterface):
 
         return None
 
-
     def program_calibration(self, calibrate: int, fuse: int) -> None:
         """
         Program calibration
@@ -231,7 +228,6 @@ class ProgrammingInterface(IProgrammingInterface):
         # response_ok = b'Y'
         if response != b'Y':
             raise InvalidResponseError
-
 
     def read_rom(self) -> bytes:
         """Returns contents of PIC ROM as a string of big-endian values."""

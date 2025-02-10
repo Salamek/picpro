@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 
 class IConnection:
     detected_programmer_version: int
+
     def __init__(self, port: str):
         try:
             self.serial_connection = serial.Serial(

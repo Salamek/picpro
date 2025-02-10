@@ -74,7 +74,6 @@ class IProgrammingInterface:
         """Returns the value of the PIC's debugging vector."""
         raise NotImplementedError
 
-
     def close(self) -> None:
         raise NotImplementedError
 
