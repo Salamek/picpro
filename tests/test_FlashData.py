@@ -1,16 +1,13 @@
-import os
 import pytest
-from pathlib import Path
+
+from intelhex import IntelHex
 
 from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.FlashData import FlashData
-from picpro.HexFileReader import HexFileReader
 
 
-
-
-def test_be_constructed_with(chip_info_entry: ChipInfoEntry, hex_file_reader: HexFileReader) -> None:
-    FlashData(chip_info_entry, hex_file_reader)
+def test_be_constructed_with(chip_info_entry: ChipInfoEntry, hex_file: IntelHex) -> None:
+    FlashData(chip_info_entry, hex_file)
 
 
 def test_rom_data(flash_data: FlashData) -> None:

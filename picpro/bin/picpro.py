@@ -53,8 +53,6 @@ from docopt import docopt
 from picpro.ChipInfoReader import ChipInfoReader
 from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.FlashData import FlashData
-from picpro.FlashDataIntel import FlashDataIntel
-from picpro.HexFileReader import HexFileReader
 from picpro.exceptions import FuseError, InvalidResponseError
 from picpro.protocol.ChipConfig import ChipConfig
 from picpro.protocol.IProgrammingInterface import IProgrammingInterface
@@ -186,11 +184,11 @@ def program() -> None:
 
     hex_file = Path(OPTIONS['--hex_file'])
     try:
-        hex_file_reader = HexFileReader(hex_file)
+        intel_hex = IntelHex(str(hex_file))
         chip_info_reader = ChipInfoReader(_find_chip_data())
         chip_info_entry = chip_info_reader.get_chip(OPTIONS['--pic_type'])
         try:
-            flash_data = FlashData(chip_info_entry, hex_file_reader, fuses=fuses, pic_id=OPTIONS['--id'])
+            flash_data = FlashData(chip_info_entry, intel_hex, fuses=fuses, pic_id=OPTIONS['--id'])
             print('Opening connection to programmer...')
             with Connection(OPTIONS['--port']) as connection:
                 print('Initializing programming interface...')
@@ -244,10 +242,10 @@ def program() -> None:
 def verify() -> None:
     hex_file = Path(OPTIONS['--hex_file'])
     try:
-        hex_file_reader = HexFileReader(hex_file)
+        intel_hex = IntelHex(str(hex_file))
         chip_info_reader = ChipInfoReader(_find_chip_data())
         chip_info_entry = chip_info_reader.get_chip(OPTIONS['--pic_type'])
-        flash_data = FlashData(chip_info_entry, hex_file_reader)
+        flash_data = FlashData(chip_info_entry, intel_hex)
         print('Opening connection to programmer...')
         with Connection(OPTIONS['--port']) as connection:
             print('Initializing programming interface...')
@@ -373,7 +371,7 @@ def hex_info() -> None:
         return None
 
     try:
-        flash_data = FlashDataIntel(chip_info_entry, intel_hex)
+        flash_data = FlashData(chip_info_entry, intel_hex)
     except FuseError:
         print('Invalid fuse setting. Fuse names and valid settings for this chip are as follows:')
         print(chip_info_entry.fuse_doc)

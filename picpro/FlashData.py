@@ -1,19 +1,45 @@
+import dataclasses
 import struct
-from typing import Optional, Tuple, List
-
+from typing import Optional, List, Callable
+from intelhex import IntelHex
 from picpro.ChipInfoEntry import ChipInfoEntry
-from picpro.HexFileReader import HexFileReader
-from picpro.tools import range_filter_records, swab_record, merge_records
+from picpro.tools import swab_bytes
 
+
+@dataclasses.dataclass
+class MemoryRegion:
+    start: int
+    end: int
+
+@dataclasses.dataclass
+class MemoryMapping:
+    rom: MemoryRegion
+    eeprom: MemoryRegion
+    config: MemoryRegion
+    id: Optional[MemoryRegion] = None
+
+
+@dataclasses.dataclass
+class PaddedBuffer:
+    data: bytes
+    raw_size: int
+    padding_size: int
+    size: int
+
+    def swab_bytes(self) -> None:
+        self.data = swab_bytes(self.data)
 
 class FlashData:
     calibration_word: Optional[bytes]
-    rom_records: List[Tuple[int, bytes]]
-    eeprom_records: List[Tuple[int, bytes]]
-    config_records: List[Tuple[int, bytes]]
-    id_records: List[Tuple[int, bytes]]
+    rom_buffer: PaddedBuffer
+    eeprom_buffer: PaddedBuffer
+    config_buffer: PaddedBuffer
+    fuse_buffer: PaddedBuffer
+    id_buffer: Optional[PaddedBuffer]
 
-    def __init__(self, chip_info: ChipInfoEntry, hex_file: HexFileReader, pic_id: Optional[str] = None, fuses: Optional[dict] = None):
+    _memory_mapping: MemoryMapping
+
+    def __init__(self, chip_info: ChipInfoEntry, hex_file: IntelHex, pic_id: Optional[str] = None, fuses: Optional[dict] = None):
         self.chip_info = chip_info
         self.hex_file = hex_file
         self.pic_id = pic_id
@@ -21,79 +47,138 @@ class FlashData:
 
         # Reset
         self.calibration_word = None
-        self.rom_records = []
-        self.eeprom_records = []
-        self.config_records = []
-        self.id_records = []
+        self.id_buffer = None
 
-        self.core_bits = chip_info.core_bits
-        self.rom_blank_word = self._calculate_rom_blank_word()
-        self.rom_blank = struct.pack('>H', self.rom_blank_word) * chip_info.rom_size
-        self.eeprom_blank = b'\xff' * chip_info.eeprom_size
+        self._rom_blank_word = self._calculate_rom_blank_word()
+        self._fuse_data_blank = b''.join(map(lambda word: struct.pack('>H', word), self.chip_info.fuse_blank))
+
+        self._memory_mapping = MemoryMapping(
+            rom=MemoryRegion(0x0000, 0x4000),
+            config=MemoryRegion(0x4000, 0x4010),
+            eeprom=MemoryRegion(0x4200, 0xffff),
+        )
+
+        if self.chip_info.core_bits == 16:
+            self._memory_mapping = MemoryMapping(
+                rom=MemoryRegion(0x0000, 0x8000),
+                eeprom=MemoryRegion(0xf000, 0xf0ff),
+                config=MemoryRegion(0x300000, 0x30000e),
+                id=MemoryRegion(0x200000, 0x200010)
+            )
 
         self.process()
 
+    def _tobinarray_really(self, start: int, end: int, pad_callback: Callable[[int, int], int], max_size: Optional[int] = None) -> PaddedBuffer:
+        """Return binary array."""
+        buf = bytearray()
+        raw_size = 0
+        for index, address in enumerate(range(start, end)):
+            found = self.hex_file._buf.get(address)
+            if found is not None:
+                raw_size += 1
+
+            if max_size is not None and found and index > max_size:
+                raise ValueError('Range contains data over expected max_size')
+
+            if max_size is None or index < max_size:
+                buf.append(found if found is not None else pad_callback(address, index))
+
+        result_len = len(buf)
+        if result_len % 2 != 0:
+            raise ValueError('Result should have even len! ({} % 2 != 0)'.format(result_len))
+
+        return PaddedBuffer(
+            data=bytes(buf),
+            raw_size=raw_size,
+            padding_size=result_len-raw_size,
+            size=result_len
+        )
+
+
     def _calculate_rom_blank_word(self) -> int:
-        blank_word = 0xffff << self.core_bits
+        blank_word = 0xffff << self.chip_info.core_bits
         return ~blank_word & 0xffff
 
-    def _define_memory_regions(self) -> dict:
-        if self.core_bits == 16:
-            return {
-                'rom': (0x0000, 0x8000),
-                'eeprom': (0xf000, 0xf0ff),
-                'config': (0x300000, 0x30000e),
-                'id': (0x200000, 0x200010)
-            }
-        return {
-            'rom': (0x0000, 0x4000),
-            'config': (0x4000, 0x4010),
-            'eeprom': (0x4200, 0xffff)
-        }
-
     def _filter_records(self) -> None:
-        regions = self._define_memory_regions()
-        self.rom_records = range_filter_records(self.hex_file.records, *regions['rom'])
-        self.config_records = range_filter_records(self.hex_file.records, *regions['config'])
-        self.eeprom_records = range_filter_records(self.hex_file.records, *regions['eeprom'])
+        rom_blank_word = struct.pack('<H', self._rom_blank_word)
+        self.rom_buffer = self._tobinarray_really(
+            start=self._memory_mapping.rom.start,
+            end=self._memory_mapping.rom.end,
+            max_size=(self.chip_info.rom_size * 2), # Makes _tobinarray_really to rise ValueError if there are data in given range over expected size of chip
+            pad_callback=lambda adr, i: rom_blank_word[i % 2]  # LoL, i % 2 returns 1/0 and rom_blank_word are two bytes with index 0 and 1 ;)
+        )
 
-        if 'id' in regions:
-            self.id_records = range_filter_records(self.hex_file.records, *regions['id'])
+        self.eeprom_buffer = self._tobinarray_really(
+            start=self._memory_mapping.eeprom.start,
+            end=self._memory_mapping.eeprom.end,
+            max_size=self.chip_info.eeprom_size,
+            pad_callback=lambda adr, i: 0x0FF
+        )
+
+        self.config_buffer = self._tobinarray_really(
+            start=self._memory_mapping.config.start,
+            end=self._memory_mapping.config.end,
+            pad_callback=lambda adr, i: 0x000
+        )
+
+        if self.chip_info.core_bits == 16:
+            self.fuse_buffer = self._tobinarray_really(
+                start=0x300000,
+                end=0x30000e,
+                pad_callback=lambda adr, i: self._fuse_data_blank[i]
+            )
+        else:
+            self.fuse_buffer = self._tobinarray_really(
+                start=0x400e,
+                end=0x4010,
+                pad_callback=lambda adr, i: self._fuse_data_blank[i]
+            )
+
+        if self._memory_mapping.id:
+            self.id_buffer = self._tobinarray_really(
+                start=self._memory_mapping.id.start,
+                end=self._memory_mapping.id.end,
+                pad_callback=lambda adr, i: 0x000
+            )
 
     def _is_little_endian(self) -> bool:
-        if self.core_bits == 16:
+        if self.chip_info.core_bits == 16:
             return True
-        for record in self.rom_records:
-            if record[0] % 2 != 0:
-                raise ValueError('ROM record starts on odd address.')
-            for x in range(0, len(record[1]), 2):
-                if (x + 2) < len(record[1]):
-                    be_word, = struct.unpack('>H', record[1][x:x + 2])
-                    le_word, = struct.unpack('<H', record[1][x:x + 2])
-                    be_ok = (be_word & self.rom_blank_word) == be_word
-                    le_ok = (le_word & self.rom_blank_word) == le_word
-                    if be_ok and not le_ok:
-                        return False
-                    if le_ok and not be_ok:
-                        return True
-                    if not (le_ok or be_ok):
-                        raise ValueError('Invalid ROM word.')
+
+        for x in range(0, self.rom_buffer.size, 2):
+            if (x + 2) < self.rom_buffer.size:
+                be_word, = struct.unpack('>H', self.rom_buffer.data[x:x + 2])
+                le_word, = struct.unpack('<H', self.rom_buffer.data[x:x + 2])
+                be_ok = (be_word & self._rom_blank_word) == be_word
+                le_ok = (le_word & self._rom_blank_word) == le_word
+                if be_ok and not le_ok:
+                    return False
+                if le_ok and not be_ok:
+                    return True
+                if not (le_ok or be_ok):
+                    raise ValueError('Invalid ROM word.')
         return False
 
     def process(self) -> None:
         self._filter_records()
-        swap_bytes = self._is_little_endian()
-        if swap_bytes:
-            self.rom_records = [*map(swab_record, self.rom_records)]
-            self.config_records = [*map(swab_record, self.config_records)]
-            self.id_records = [*map(swab_record, self.id_records)]
+        is_swap_bytes = self._is_little_endian()
 
-        pick_byte = 0 if swap_bytes else 1
-        self.eeprom_records = [
-            (int(0x4200 + ((rec[0] - 0x4200) / 2)),
-             bytes([rec[1][i] for i in range(pick_byte, len(rec[1]), 2)]))
-            for rec in self.eeprom_records
-        ]
+        if is_swap_bytes:
+            self.rom_buffer.swab_bytes()
+            self.config_buffer.swab_bytes()
+            self.eeprom_buffer.swab_bytes()
+            self.fuse_buffer.swab_bytes()
+            if self.id_buffer:
+                self.id_buffer.swab_bytes()
+
+
+        # pick_byte = 0 if is_swap_bytes else 1
+        # self.eeprom_records = [
+        #     (int(0x4200 + ((rec[0] - 0x4200) / 2)),
+        #     bytes([rec[1][i] for i in range(pick_byte, len(rec[1]), 2)]))
+        #     for rec in self.eeprom_records
+        # ]
+
 
         # check Fuses
         if self.fuses:
@@ -107,40 +192,25 @@ class FlashData:
 
     @property
     def rom_data(self) -> bytes:
-        data = merge_records(self.rom_records, self.rom_blank)
         if self.calibration_word and self.chip_info.cal_word:
-            # Patch calibration word into rom_data
-            # @TODO add logging.info here
-            return data[:len(data) - 2] + self.calibration_word
-
-        return data
+            return self.rom_buffer.data[:self.rom_buffer.size - 2] + self.calibration_word
+        return self.rom_buffer.data
 
     @property
     def eeprom_data(self) -> bytes:
-        return merge_records(self.eeprom_records, self.eeprom_blank, 0x4200)
+        return self.eeprom_buffer.data
 
     @property
     def id_data(self) -> bytes:
         if self.pic_id:
             return bytes.fromhex(self.pic_id)
-        if self.core_bits == 16:
-            id_data_raw = range_filter_records(self.id_records, 0x100000, 0x100008)
-        else:
-            id_data_raw = range_filter_records(self.config_records, 0x4000, 0x4008)
-        id_data = merge_records(id_data_raw, b'\x00' * 8, 0x100000 if self.core_bits == 16 else 0x4000)
-        return id_data if self.core_bits == 16 else bytes([id_data[x] for x in range(1, 8, 2)])
+
+        id_data = self.id_buffer.data[:8] if self.id_buffer else self.config_buffer.data[:8]
+        return id_data if self.chip_info.core_bits == 16 else bytes([id_data[x] for x in range(1, 8, 2)])
 
     @property
-    def fuse_data(self) -> List[int]:  # @TODO migrate to bytes
-        fuse_data_blank = b''.join(map(lambda word: struct.pack('>H', word), self.chip_info.fuse_blank))
-        if self.core_bits == 16:
-            fuse_config = range_filter_records(self.config_records, 0x300000, 0x30000e)
-            fuse_data = merge_records(fuse_config, fuse_data_blank, 0x300000)
-        else:
-            fuse_config = range_filter_records(self.config_records, 0x400e, 0x4010)
-            fuse_data = merge_records(fuse_config, fuse_data_blank, 0x400e)
-
-        fuse_values = [int(struct.unpack('>H', fuse_data[x:x + 2])[0]) for x in range(0, len(fuse_data), 2)]
+    def fuse_data(self) -> List[int]:
+        fuse_values = [int(struct.unpack('>H', self.fuse_buffer.data[x:x + 2])[0]) for x in range(0, self.fuse_buffer.size, 2)]
         if self.fuses:
             fuse_settings = self.chip_info.decode_fuse_data(fuse_values)
             fuse_settings.update(self.fuses)
