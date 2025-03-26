@@ -52,16 +52,3 @@ class HexFileReader:
                         raise InvalidRecordError('Unknown record type ({}).'.format(record_type))
                 elif len(line) != 0:
                     raise InvalidRecordError('Record does not start with colon: {}.'.format(line))
-
-    def merge(self, data_str: bytes) -> bytes:
-        data_list = bytearray(data_str)
-
-        for record in self.records:
-            (address, data) = record
-
-            if (address + len(data)) > len(data_list):
-                raise IndexError('Data record out of range.')
-
-            data_list[address:address + len(data)] = data
-
-        return bytes(data_list)

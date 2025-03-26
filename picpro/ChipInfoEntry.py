@@ -19,8 +19,8 @@ class ChipInfoEntry:
     program_tries: int
     over_program: int
     core_type: str
-    rom_size: int
-    eeprom_size: int
+    rom_size: int  # n of words (byte*2)
+    eeprom_size: int  # n of bytes
     fuse_blank: list
     cp_warn: bool
     cal_word: bool

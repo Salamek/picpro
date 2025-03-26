@@ -1,9 +1,11 @@
 import os
 from pathlib import Path
 import pytest
+from intelhex import IntelHex
 
 from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.FlashData import FlashData
+from picpro.FlashDataIntel import FlashDataIntel
 from picpro.HexFileReader import HexFileReader
 from picpro.ChipInfoReader import ChipInfoReader
 
@@ -33,3 +35,11 @@ def hex_file_reader(hex_file_path: Path) -> HexFileReader:
 @pytest.fixture(scope="function")  # type: ignore
 def flash_data(chip_info_entry: ChipInfoEntry, hex_file_reader: HexFileReader) -> FlashData:
     return FlashData(chip_info_entry, hex_file_reader)
+
+@pytest.fixture(scope="function")  # type: ignore
+def hex_file(hex_file_path: Path) -> IntelHex:
+    return IntelHex(str(hex_file_path))
+
+@pytest.fixture(scope="function")  # type: ignore
+def flash_data_intel(chip_info_entry: ChipInfoEntry, hex_file: IntelHex) -> FlashDataIntel:
+    return FlashDataIntel(chip_info_entry, hex_file)

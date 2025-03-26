@@ -53,6 +53,7 @@ from docopt import docopt
 from picpro.ChipInfoReader import ChipInfoReader
 from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.FlashData import FlashData
+from picpro.FlashDataIntel import FlashDataIntel
 from picpro.HexFileReader import HexFileReader
 from picpro.exceptions import FuseError, InvalidResponseError
 from picpro.protocol.ChipConfig import ChipConfig
@@ -345,13 +346,13 @@ def chip_info() -> None:
 @command()
 def hex_info() -> None:
     pic_type = OPTIONS['<PIC_TYPE>']
-    hex_file_name = Path(OPTIONS['<HEX_FILE>'])
+    hex_file_path = Path(OPTIONS['<HEX_FILE>'])
 
     # Read hex file.
     try:
-        hex_file = HexFileReader(hex_file_name)
+        intel_hex = IntelHex(str(hex_file_path))
     except IOError:
-        print('Unable to find hex file "{}".'.format(hex_file_name))
+        print('Unable to find hex file "{}".'.format(hex_file_path))
         print('Please verify that the file exists and that you have access to it.')
         return None
 
@@ -372,20 +373,20 @@ def hex_info() -> None:
         return None
 
     try:
-        flash_data = FlashData(chip_info_entry, hex_file)
+        flash_data = FlashDataIntel(chip_info_entry, intel_hex)
     except FuseError:
         print('Invalid fuse setting. Fuse names and valid settings for this chip are as follows:')
         print(chip_info_entry.fuse_doc)
         return None
 
-    word_count_rom = len(flash_data.rom_data) // 2
-    word_count_eeprom = len(flash_data.eeprom_data) // 2
+    word_count_rom = flash_data.rom_buffer.raw_size // 2
+    word_count_eeprom = flash_data.eeprom_buffer.raw_size // 2
     print('ROM {} words used, {} words free on chip.'.format(word_count_rom, chip_info_entry.rom_size - word_count_rom))
     print('EEPROM {} words used, {} words free on chip.'.format(word_count_eeprom, chip_info_entry.eeprom_size - word_count_eeprom))
 
     indent_char = '  '
     in_list_char = '- '
-    intel_hex = IntelHex(hex_file_name)
+
     if intel_hex.start_addr:
         keys = sorted(intel_hex.start_addr.keys())
         if keys == ['CS', 'IP']:
@@ -402,8 +403,8 @@ def hex_info() -> None:
             print("{:s}{:s}{{ first: 0x{:08X}, last: 0x{:08X}, length: 0x{:08X} }}".format(indent_char, in_list_char, s[0], s[1] - 1, s[1] - s[0]))
     print("")
 
-    #if self.chip_info.programming_vars.rom_size < word_count:  # type: ignore
-    #    raise InvalidValueError('Data too large for PIC ROM {} > {}.'.format(word_count, chip_info.programming_vars.rom_size))
+    #intel_hex.dump()
+
     return None
 
 
