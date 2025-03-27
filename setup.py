@@ -24,7 +24,8 @@ setup(
     install_requires=[
         'pyserial',
         'docopt',
-        'intelhex'
+        'intelhex',
+        'pyyaml'
     ],
     tests_require=[
         'tox'

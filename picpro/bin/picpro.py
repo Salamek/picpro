@@ -15,6 +15,7 @@ Command details:
     hex_info            Prints information about hexfile.
     programmer_info     Print information about your programmer.
     read_chip_config    Read config from chip.
+    chipdata_migrate    Migrate chip data to new format.
 
 Usage:
     picpro program -p PORT -i HEX_FILE -t PIC_TYPE [--id=PIC_ID] [--fuse=FUSE_NAME:FUSE_VALUE...] [--icsp]
@@ -26,6 +27,7 @@ Usage:
     picpro hex_info <HEX_FILE> <PIC_TYPE>
     picpro programmer_info -p PORT
     picpro decode_fuses <fuses> -t PIC_TYPE
+    picpro chipdata_migrate
     picpro (-h | --help)
 
 
@@ -44,8 +46,9 @@ import os.path
 import sys
 import signal
 import json
+import yaml
 from functools import wraps
-from typing import Optional, Callable
+from typing import Optional, Callable, Any
 from pathlib import Path
 
 from intelhex import IntelHex
@@ -106,10 +109,8 @@ def command(name: Optional[str] = None) -> Callable:
 
 def _find_chip_data() -> Path:
     path_list = [
-        os.path.join('/', 'usr', 'share', 'picpro', 'chipdata.cid'),
         os.path.abspath(os.path.join(APP_ROOT_FOLDER, '..', 'usr', 'share', 'picpro', 'chipdata.cid')),
-        os.path.abspath(os.path.join(APP_ROOT_FOLDER, '..', 'usr', 'lib', 'picpro', 'chipdata.cid')),  # Legacy search path
-        os.path.abspath(os.path.join(APP_ROOT_FOLDER, '..', 'lib', 'picpro', 'chipdata.cid')),  # Legacy search path
+        os.path.join('/', 'usr', 'share', 'picpro', 'chipdata.cid'),
         os.path.join(APP_ROOT_FOLDER, 'chipdata.cid')
     ]
 
@@ -453,6 +454,67 @@ def read_chip_config() -> None:
         print('Unable to locate chipinfo.cid file.')
         print('Please verify that file is present in the same directory as this script, '
               'and that the filename is in lowercase characters, and that you have access to read the file.')
+
+
+@command()
+def chipdata_migrate() -> None:
+    chip_info_reader = ChipInfoReader(_find_chip_data())
+    output_dir = Path('./usr/share/picpro/chip-data.d')
+
+    def hex_string_representer(dumper: yaml.Dumper, data: Any):
+        if isinstance(data, str) and data.startswith("0x"):
+            return dumper.represent_scalar("tag:yaml.org,2002:int", hex(int(data, 16)))
+        return dumper.represent_scalar("tag:yaml.org,2002:str", data)
+
+    class HexStringDumper(yaml.Dumper):
+        pass
+
+    HexStringDumper.add_representer(str, hex_string_representer)
+
+    socket_image_to_dip = {
+        '8pin': 'dip8',
+        '14pin': 'dip14',
+        '18pin': 'dip18',
+        '28Npin': 'dip28',
+        '40pin': 'dip40',
+    }
+
+    for chip_name, chip_entry in chip_info_reader.chip_entries.items():
+        chip_name_lower = chip_name.lower()
+        file_path = output_dir.joinpath('{}.yml'.format(chip_name_lower))
+        with file_path.open('w') as f:
+            data = chip_entry.to_dict()
+            data['chip_id'] = hex(chip_entry.chip_id)
+            data['core_type'] = chip_entry.core_type.lower()
+            data['chip_name'] = chip_name_lower
+            try:
+                data['socket_image'] = socket_image_to_dip[chip_entry.socket_image] if not chip_entry.icsp_only else None
+            except KeyError:
+                print(chip_name)
+                raise
+            #data['rom_size_words'] = data['rom_size']  # @TODO remove?
+            #data['rom_size'] = data['rom_size'] * 2 # Conver to bytes from words
+
+            fuse_blank = {}
+            for index, fuse in enumerate(chip_entry.fuse_blank):
+                fuse_blank[index] = hex(fuse)
+
+            data['fuses_blank'] = fuse_blank
+            del data['fuse_blank']
+            del data['fuses']
+            fuses = {}
+
+            for fuse_name, fuse_options in chip_entry.fuses.items():
+                for option_name, options in fuse_options.items():
+                    fuses.setdefault(fuse_name, {})
+                    option_values = {}
+                    for option_index, option_value in options:
+                        option_values[option_index] = option_value
+                    fuses[fuse_name].setdefault(option_name, option_values)
+
+            data['fuses'] = fuses
+
+            yaml.dump(data, f, Dumper=HexStringDumper, sort_keys=False)
 
 
 def main() -> None:
