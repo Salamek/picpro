@@ -46,11 +46,11 @@ import os.path
 import sys
 import signal
 import json
-import yaml
 from functools import wraps
 from typing import Optional, Callable, Any
 from pathlib import Path
 
+import yaml
 from intelhex import IntelHex
 from docopt import docopt
 from picpro.ChipInfoReader import ChipInfoReader
@@ -482,7 +482,7 @@ def chipdata_migrate() -> None:
     for chip_name, chip_entry in chip_info_reader.chip_entries.items():
         chip_name_lower = chip_name.lower()
         file_path = output_dir.joinpath('{}.yml'.format(chip_name_lower))
-        with file_path.open('w') as f:
+        with file_path.open('w', encoding='utf-8') as f:
             data = chip_entry.to_dict()
             data['chip_id'] = hex(chip_entry.chip_id)
             data['core_type'] = chip_entry.core_type.lower()
