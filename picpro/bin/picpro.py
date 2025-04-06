@@ -378,10 +378,11 @@ def hex_info() -> None:
         print(chip_info_entry.fuse_doc)
         return None
 
+
     word_count_rom = flash_data.rom_buffer.raw_size // 2
-    word_count_eeprom = flash_data.eeprom_buffer.raw_size // 2
+    word_count_eeprom = flash_data.eeprom_buffer.raw_size
     print('ROM {} words used, {} words free on chip.'.format(word_count_rom, chip_info_entry.rom_size - word_count_rom))
-    print('EEPROM {} words used, {} words free on chip.'.format(word_count_eeprom, chip_info_entry.eeprom_size - word_count_eeprom))
+    print('EEPROM {} bytes used, {} bytes free on chip.'.format(word_count_eeprom, chip_info_entry.eeprom_size - word_count_eeprom))
 
     indent_char = '  '
     in_list_char = '- '
