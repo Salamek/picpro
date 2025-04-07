@@ -104,7 +104,7 @@ class P018aMockedDeviceThread:
     in_jump_table: bool
     is_programming_voltages_on: bool
     programing_vars: Optional[ProgramingVars]
-    def __init__(self, device: 'P018MockedDevice'):
+    def __init__(self, device: 'P018aMockedDevice'):
         self.device = device
         self.is_programming_voltages_on = False
         self.in_jump_table = False

@@ -16,5 +16,3 @@ def swab_bytes(to_swab: bytes) -> bytes:
         result.append(to_swab[x])
 
     return bytes(result)
-
-
