@@ -4,6 +4,7 @@ import pytest
 import time
 from unittest.mock import patch
 from picpro.ChipInfoEntry import ChipInfoEntry
+from picpro.FlashData import FlashData
 from picpro.protocol.IProgrammingInterface import IProgrammingInterface
 from tests.P018MockedDevice import P018MockedDevice
 
@@ -47,7 +48,6 @@ def test_wait_until_chip_out_of_socket(mock_connection: Connection) -> None:
 
 def test_programmer_version(mock_connection: Connection) -> None:
     result = mock_connection.programmer_version()
-    print(result)
     assert result == 3
 
 def test_programmer_protocol(mock_connection: Connection) -> None:
@@ -73,6 +73,15 @@ def test_set_programming_voltages_command_false(mock_programming_interface: Prog
 
 def test_cycle_programming_voltages(mock_programming_interface: ProgrammingInterface) -> None:
     mock_programming_interface.cycle_programming_voltages()
+
+def test_program_rom(mock_programming_interface: ProgrammingInterface, flash_data: FlashData) -> None:
+    mock_programming_interface.program_rom(flash_data.rom_data)
+
+def test_program_eeprom(mock_programming_interface: ProgrammingInterface, flash_data: FlashData) -> None:
+    mock_programming_interface.program_eeprom(flash_data.eeprom_data)
+
+def test_program_id_fuses(mock_programming_interface: ProgrammingInterface, flash_data: FlashData) -> None:
+    mock_programming_interface.program_id_fuses(flash_data.id_data, flash_data.fuse_data)
 
 def test_close(mock_serial_device: P018MockedDevice) -> None:
     # !FIXME Hack , order of test matter and we need to close our device after last test to stop its thread...
