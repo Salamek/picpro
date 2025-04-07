@@ -32,7 +32,7 @@ class P018MockedDeviceThread:
     def write(self, data: bytes) -> None:
         self.device.mock_send(data)
 
-    def listen_for_commands(self):
+    def listen_for_commands(self) -> None:
         while self.device.is_open:
             data = self.read()
             if self.in_jump_table:
@@ -125,7 +125,7 @@ class P018MockedDevice:
     def reset_input_buffer(self) -> None:
         self.input_buffer = b''
 
-    def _reset(self):
+    def _reset(self) -> None:
         self.output_buffer = b''
         self.input_buffer = b''
         # Device sends its version on device reset

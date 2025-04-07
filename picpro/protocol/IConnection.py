@@ -141,7 +141,7 @@ class IConnection:
         """Blocks until chip is removed from programming socket."""
         raise NotImplementedError
 
-    def programmer_version(self) -> bytes:
+    def programmer_version(self) -> int:
         """Returns the PIC programmer's numeric version.
         K128     = 0  (Byte)
         K149-A   = 1  (Byte)

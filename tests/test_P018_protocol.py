@@ -29,7 +29,7 @@ def mock_connection(mock_serial: serial.Serial, mock_serial_device: P018MockedDe
 
     return Connection("/dev/ttyUSB0")
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="module")  # type: ignore
 def mock_programming_interface(mock_connection: Connection, chip_info_entry: ChipInfoEntry) -> IProgrammingInterface:
     return mock_connection.get_programming_interface(chip_info_entry)
 
@@ -47,6 +47,7 @@ def test_wait_until_chip_out_of_socket(mock_connection: Connection) -> None:
 
 def test_programmer_version(mock_connection: Connection) -> None:
     result = mock_connection.programmer_version()
+    print(result)
     assert result == 3
 
 def test_programmer_protocol(mock_connection: Connection) -> None:

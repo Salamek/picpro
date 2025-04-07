@@ -29,6 +29,7 @@ Usage:
     picpro decode_fuses <fuses> -t PIC_TYPE
     picpro chipdata_migrate
     picpro (-h | --help)
+    picpro (-v | --version)
 
 
 Options:
@@ -40,6 +41,7 @@ Options:
     -i HEX_FILE --hex_file=HEX_FILE  Hex file to flash or to read.
     -o HEX_FILE --hex_file=HEX_FILE  Hex file to write.
     --binary                         Input/Output file is in binary.
+    -v --version                     Display version info
 """
 
 import os.path
@@ -47,12 +49,14 @@ import sys
 import signal
 import json
 from functools import wraps
-from typing import Optional, Callable, Any
+from typing import Optional, Callable, Any, Dict
 from pathlib import Path
 
 import yaml
 from intelhex import IntelHex
 from docopt import docopt
+from yaml import ScalarNode
+
 from picpro.ChipInfoReader import ChipInfoReader
 from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.FlashData import FlashData
@@ -61,11 +65,16 @@ from picpro.protocol.ChipConfig import ChipConfig
 from picpro.protocol.IProgrammingInterface import IProgrammingInterface
 from picpro.tools import swab_bytes
 from picpro.protocol.p18a.Connection import Connection
+from picpro import __version__
 import picpro as app_root
 
 APP_ROOT_FOLDER = os.path.abspath(os.path.dirname(app_root.__file__))
 
 OPTIONS = docopt(__doc__)
+
+if OPTIONS['--version']:
+    print(__version__)
+    sys.exit(0)
 
 
 def command(name: Optional[str] = None) -> Callable:
@@ -413,7 +422,7 @@ def programmer_info() -> None:
     port = OPTIONS['--port']
     try:
         with Connection(port) as connection:
-            print('Firmware version: {}'.format(connection.programmer_version().decode('UTF-8')))
+            print('Firmware version: {}'.format(connection.programmer_version()))
             print('Protocol version: {}'.format(connection.programmer_protocol().decode('UTF-8')))
     except ConnectionError:
         print('Unable to open serial port "{}".'.format(port))
@@ -462,12 +471,12 @@ def chipdata_migrate() -> None:
     chip_info_reader = ChipInfoReader(_find_chip_data())
     output_dir = Path('./usr/share/picpro/chip-data.d')
 
-    def hex_string_representer(dumper: yaml.Dumper, data: Any):
+    def hex_string_representer(dumper: yaml.Dumper, data: Any) -> ScalarNode:
         if isinstance(data, str) and data.startswith("0x"):
             return dumper.represent_scalar("tag:yaml.org,2002:int", hex(int(data, 16)))
         return dumper.represent_scalar("tag:yaml.org,2002:str", data)
 
-    class HexStringDumper(yaml.Dumper):
+    class HexStringDumper(yaml.Dumper):  # pylint: disable=too-many-ancestors
         pass
 
     HexStringDumper.add_representer(str, hex_string_representer)
@@ -493,8 +502,8 @@ def chipdata_migrate() -> None:
             except KeyError:
                 print(chip_name)
                 raise
-            #data['rom_size_words'] = data['rom_size']  # @TODO remove?
-            #data['rom_size'] = data['rom_size'] * 2 # Conver to bytes from words
+            data['rom_size_words'] = data['rom_size']  # @TODO remove?
+            data['rom_size'] = data['rom_size'] * 2 # Conver to bytes from words
 
             fuse_blank = {}
             for index, fuse in enumerate(chip_entry.fuse_blank):
@@ -503,7 +512,7 @@ def chipdata_migrate() -> None:
             data['fuses_blank'] = fuse_blank
             del data['fuse_blank']
             del data['fuses']
-            fuses = {}
+            fuses: Dict[str, Dict[str, Dict[int, int]]] = {}
 
             for fuse_name, fuse_options in chip_entry.fuses.items():
                 for option_name, options in fuse_options.items():
