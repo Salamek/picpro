@@ -6,16 +6,16 @@ from unittest.mock import patch
 from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.FlashData import FlashData
 from picpro.protocol.IProgrammingInterface import IProgrammingInterface
-from tests.P018MockedDevice import P018MockedDevice
+from tests.P018aMockedDevice import P018aMockedDevice
 
-from picpro.protocol.p018.Connection import Connection
-from picpro.protocol.p018.ProgrammingInterface import ProgrammingInterface
+from picpro.protocol.p18a.Connection import Connection
+from picpro.protocol.p18a.ProgrammingInterface import ProgrammingInterface
 
 
 @pytest.fixture(scope="session")  # type: ignore
-def mock_serial_device() -> P018MockedDevice:
+def mock_serial_device() -> P018aMockedDevice:
     """Fixture to return a mocked serial device."""
-    device = P018MockedDevice()
+    device = P018aMockedDevice()
 
     threading.Thread(target=device.work_thread.listen_for_commands, daemon=True).start()
 
@@ -24,7 +24,7 @@ def mock_serial_device() -> P018MockedDevice:
 
 @pytest.fixture(scope="module")  # type: ignore
 @patch("serial.Serial", autospec=True)
-def mock_connection(mock_serial: serial.Serial, mock_serial_device: P018MockedDevice) -> Connection:
+def mock_connection(mock_serial: serial.Serial, mock_serial_device: P018aMockedDevice) -> Connection:
     """Test communication with a mocked serial device."""
     mock_serial.return_value = mock_serial_device
 
@@ -83,6 +83,6 @@ def test_program_eeprom(mock_programming_interface: ProgrammingInterface, flash_
 def test_program_id_fuses(mock_programming_interface: ProgrammingInterface, flash_data: FlashData) -> None:
     mock_programming_interface.program_id_fuses(flash_data.id_data, flash_data.fuse_data)
 
-def test_close(mock_serial_device: P018MockedDevice) -> None:
+def test_close(mock_serial_device: P018aMockedDevice) -> None:
     # !FIXME Hack , order of test matter and we need to close our device after last test to stop its thread...
     mock_serial_device.close()

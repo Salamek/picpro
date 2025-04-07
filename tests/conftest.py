@@ -1,13 +1,10 @@
 import os
 from pathlib import Path
 import pytest
-import serial
-import threading
 from intelhex import IntelHex
 from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.FlashData import FlashData
 from picpro.ChipInfoReader import ChipInfoReader
-from tests.P018MockedDevice import P018MockedDevice
 
 
 @pytest.fixture(scope="module")  # type: ignore

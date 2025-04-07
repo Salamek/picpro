@@ -100,7 +100,7 @@ class ProgramingVars:  # @TODO use this in code too
         )
 
 
-class P018MockedDeviceThread:
+class P018aMockedDeviceThread:
     in_jump_table: bool
     is_programming_voltages_on: bool
     programing_vars: Optional[ProgramingVars]
@@ -242,14 +242,15 @@ class P018MockedDeviceThread:
                     self._program_eeprom()
                 elif data == b'\x09':
                     self._program_id_fuzes()
-                elif data == b'\x13' or data == b'\x14':
+                elif data == b'\x12' or data == b'\x13':
+                    # wait_until_chip_in_socket/ wait_until_chip_out_of_socket
                     self.write(b'AY')
-                elif data == b'\x15':
+                elif data == b'\x14':
                     # programmer_version
                     self.write(b'\x03')
-                elif data == b'\x16':
+                elif data == b'\x15':
                     # get protocol
-                    self.write(b'P018')
+                    self.write(b'P18A')
                 else:
                     self.write(b'F')
             else:
@@ -266,7 +267,7 @@ class P018MockedDeviceThread:
                     self.write(b'O')
 
 
-class P018MockedDevice:
+class P018aMockedDevice:
     _dtr: bool = False
     input_buffer: bytes
     output_buffer: bytes
@@ -276,7 +277,7 @@ class P018MockedDevice:
         self.input_buffer = b''
         self.output_buffer = b''
         self.is_open = True
-        self.work_thread = P018MockedDeviceThread(self)
+        self.work_thread = P018aMockedDeviceThread(self)
 
     @property
     def dtr(self) -> bool:
