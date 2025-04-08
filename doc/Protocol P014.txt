@@ -1,7 +1,8 @@
 
 
 
-KITSRUS PROGRAMMER FIRMWARE PROTOCOL P018 AS OF 16 AUGUST 2004
+
+KITSRUS PROGRAMMER FIRMWARE PROTOCOL P014 AS OF 5 MAY 2004
 
 
 
@@ -62,7 +63,7 @@ COMMAND JUMP TABLE (Byte)
         3 - EEPROM size High
         4 - EEPROM size Low
         5 - Core Type
-             0 = 18F6x2x
+             0 = NA
              1 = 18Fx230x330
              2 = 18Fxx2xx8
              3 = 16F87 88
@@ -73,8 +74,6 @@ COMMAND JUMP TABLE (Byte)
              8 = 12F67x
              9 = 16F87xA
             10 = 16F818
-            11 = 16F57
-            12 = 10Fxxx
         6 - Program Flags
               Bit 0 = 1, Chip has calibration value ROM word
               Bit 1 = 1, Chip has Band Gap value in FUSE
@@ -96,8 +95,6 @@ COMMAND JUMP TABLE (Byte)
               3 = I6F7x7
               4 = 18Fxxxx
               5 = 16F87xA F818 F87
-              6 = 10Fxxx
-              7 = 16F57
        10 - Program Tries before programming fail
        11 - Over Program when programming succeeds
 
@@ -193,7 +190,8 @@ COMMAND JUMP TABLE (Byte)
                       0xFF (Byte)
                       0xFF (Byte)
             Programs ID and FUSE
-            RETURNS 'Y' (ASCII)
+            ERROR    - RETURNS 0xFF (Byte)
+            NO ERROR - RETURNS 0x00 (Byte)
             Stays at Command Jump Table
          or
          16 bit PIC - ID1 ID2 ID3 ID4 1D5 1D6 1D7 1D8 (ASCII)
@@ -272,7 +270,7 @@ COMMAND JUMP TABLE (Byte)
        ID8       (Byte)
        Fuse1_L   (Byte)
        Fuse1_H   (Byte)
-       Fuse2_L   (Byte) can also be CAL word #1 or address 0x2008, or 10Fxxx Backup CAL word
+       Fuse2_L   (Byte) can also be CAL word #1 or address 0x2008
        Fuse2_H   (Byte)
        Fuse3_L   (Byte) can also be CAL word #2 or address 0x2009
        Fuse3_H   (Byte)
@@ -294,12 +292,20 @@ COMMAND JUMP TABLE (Byte)
 
 
 
-  14 = ERASE CHIP
+  14 = READ CALIBRATION
+       RETURNS
+       Calibrate_H   (Byte)
+       Calibrate_L   (Byte)
+       Stays at Command Jump Table
+
+
+
+  15 = ERASE CHIP
        RETURNS 'Y' (ASCII)
 
 
 
-  15 = ERASE CHECK ROM
+  16 = ERASE CHECK ROM
        Then expects...
          High byte of blank ROM
          Eg 0x3F 14 bit PIC
@@ -319,7 +325,7 @@ COMMAND JUMP TABLE (Byte)
 
 
 
-  16 = ERASE CHECK EEPROM
+  17 = ERASE CHECK EEPROM
        RETURNS
        ALL BLANK 'Y' (ASCII)
        NOT BLANK 'N' (ASCII)
@@ -327,13 +333,13 @@ COMMAND JUMP TABLE (Byte)
 
 
 
-  17 = PROGRAM 18Fxxxx FUSE
+  18 = PROGRAM 18Fxxxx FUSE
        RETURNS 'Y' (ASCII)
        Stays at Command Jump Table
 
 
 
-  18 = CHIP IN SOCKET DETECT
+  19 = CHIP IN SOCKET DETECT
        RETURNS 'A' (ASCII)
 
 
@@ -344,7 +350,7 @@ COMMAND JUMP TABLE (Byte)
 
 
 
-  19 = CHIP OUT OF SOCKET DETECT
+  20 = CHIP OUT OF SOCKET DETECT
        RETURNS 'A' (ASCII)
 
 
@@ -355,7 +361,7 @@ COMMAND JUMP TABLE (Byte)
 
 
 
-  20 = GET VERSION
+  21 = GET VERSION
        RETURNS
          K128     = 0  (Byte)
          K149-A   = 1  (Byte)
@@ -364,7 +370,7 @@ COMMAND JUMP TABLE (Byte)
 
 
 
-  21 = GET PROTOCOL
+  22 = GET PROTOCOL
        RETURNS - Protocol number.
 
 
@@ -373,7 +379,7 @@ COMMAND JUMP TABLE (Byte)
 
 
 
-  22 = PROGRAM DEBUG VECTOR
+  23 = PROGRAM DEBUG VECTOR
        Then expects...
          High address of DEBUG vector   (Byte)
          Mid  address of DEBUG vector   (Byte)
@@ -384,21 +390,9 @@ COMMAND JUMP TABLE (Byte)
 
 
 
-  23 = READ DEBUG VECTOR
+  24 = READ DEBUG VECTOR
        RETURNS
          0xEF                           (Byte)
          High address of DEBUG vector   (Byte)
          Mid  address of DEBUG vector   (Byte)
          Low  address of DEBUG vector   (Byte)
-
-
-  24 = PROGRAM CAL DATA FOR 10Fxxx
-       Then expects...
-         Calibration High (Byte)
-         Calibration Low  (Byte)
-         Backup Calibration High (Byte)
-         Backup Calibration Low  (Byte)
-       CALIBRATION ERROR RETURNS 'C' (ASCII)
-       BACKUP CALIBRATION ERROR RETURNS 'B' (ASCII)
-       NO ERRORS RETURNS 'Y' (ASCII)
-       Stays at Command Jump Table

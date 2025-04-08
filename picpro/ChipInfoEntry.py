@@ -1,12 +1,12 @@
 import dataclasses
-from picpro.IChipInfoEntry import IChipInfoEntry
-from picpro.ProgrammingVars import ProgrammingVars
+import functools
+from picpro.ProgrammingVariables import ProgrammingVariables
 from picpro.exceptions import FuseError
 from picpro.tools import indexwise_and
 
 
 @dataclasses.dataclass
-class ChipInfoEntry(IChipInfoEntry):
+class ChipInfoEntry:
     """A single entry from a chipinfo file, with methods for feeding data to protocol_interface."""
 
     chip_name: str
@@ -97,15 +97,15 @@ class ChipInfoEntry(IChipInfoEntry):
             'fuses': self.fuses
         }
 
-    @property
-    def programming_vars(self) -> ProgrammingVars:
+    @functools.cached_property
+    def programming_vars(self) -> ProgrammingVariables:
         """Returns a ProgrammingVars"""
 
         core_type_int = self._core_type_dict.get(self.core_type)
         if not core_type_int:
-            raise ValueError('Failed to identify core_type')
+            raise ValueError('Failed to identify core_type.')
 
-        return ProgrammingVars(
+        return ProgrammingVariables(
             rom_size=self.rom_size,
             eeprom_size=self.eeprom_size,
             core_type=core_type_int,
@@ -122,7 +122,8 @@ class ChipInfoEntry(IChipInfoEntry):
             fuse_blank=self.fuse_blank,
         )
 
-    def get_core_bits(self) -> int:
+    @functools.cached_property
+    def core_bits(self) -> int:
 
         if self.core_type in ['bit16_a', 'bit16_b', 'bit16_c']:
             return 16
@@ -131,7 +132,7 @@ class ChipInfoEntry(IChipInfoEntry):
         if self.core_type in ['bit12_a', 'bit12_b']:
             return 12
 
-        raise ValueError('Failed to detect core bits')
+        raise ValueError('Failed to detect core bits.')
 
     def decode_fuse_data(self, fuse_values: list) -> dict:
         """Given a list of fuse values, return a dict of symbolic
@@ -185,12 +186,15 @@ class ChipInfoEntry(IChipInfoEntry):
 
         return result
 
+    @property
     def has_eeprom(self) -> bool:
         return self.eeprom_size != 0
 
+    @property
     def pin1_location_text(self) -> str:
         return self._socket_image_dict[self.socket_image]
 
+    @property
     def fuse_doc(self) -> str:
         result = ''
         fuse_param_list = self.fuses

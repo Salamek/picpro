@@ -11,22 +11,17 @@ def indexwise_and(fuses: list, setting_values: list) -> list:
     return result
 
 
-def swab_bytes(to_swab: bytes) -> bytearray:
+def swab_bytes(to_swab: bytes) -> bytes:
     result = bytearray()
     for x in range(0, len(to_swab), 2):
         result.append(to_swab[x + 1])
         result.append(to_swab[x])
 
-    return result
+    return bytes(result)
 
 
-def swab_record(record: list) -> Tuple[int, bytearray]:
+def swab_record(record: Tuple[int, bytes]) -> Tuple[int, bytes]:
     """Given a record from a hex file, return a new copy with adjacent data bytes swapped."""
-    #result = bytearray()
-    #for x in range(0, len(record[1]), 2):
-    #    result.append(record[1][x + 1])
-    #    result.append(record[1][x])
-
     return record[0], swab_bytes(record[1])
 
 
@@ -59,7 +54,7 @@ def range_filter_records(records: list, lower_bound: int, upper_bound: int) -> l
     return result
 
 
-def merge_records(records: list, default_data: bytes, base_address: int = 0) -> bytearray:
+def merge_records(records: list, default_data: bytes, base_address: int = 0) -> bytes:
     """Given a list of HEX file records and a data buffer with its own base address (default=0), merge the HEX file records into a new copy of the data buffer."""
     result_list = bytearray()
     mark = 0
@@ -83,4 +78,4 @@ def merge_records(records: list, default_data: bytes, base_address: int = 0) -> 
         result_list += default_data[mark:]
 
     # String-join result_list and return.
-    return result_list
+    return bytes(result_list)
