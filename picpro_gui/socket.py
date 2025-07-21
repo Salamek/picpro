@@ -2,61 +2,138 @@ import sys
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QTextEdit, QVBoxLayout, QHBoxLayout,
     QWidget, QPushButton, QComboBox, QLabel, QMenuBar, QMenu, QFileDialog, QSplitter,
-    QGraphicsView, QGraphicsScene, QGraphicsRectItem, QGraphicsTextItem
+    QGraphicsView, QGraphicsScene, QGraphicsRectItem, QGraphicsTextItem, QGraphicsEllipseItem
 )
-from PyQt6.QtGui import QIcon, QAction, QBrush, QColor
+from PyQt6.QtGui import QIcon, QAction, QBrush, QFont
 from PyQt6.QtCore import Qt, QRectF
 
 
 class SocketPreviewWidget(QGraphicsView):
     def __init__(self, chip_pins=14, socket_position=1, parent=None):
         super().__init__(parent)
+        self.dpi = self.viewport().logicalDpiX()
         self.chip_pins = chip_pins
         self.socket_position = socket_position
         self.scene = QGraphicsScene()
         self.setScene(self.scene)
+        self.scene.clear()
         self.draw_socket()
         self.draw_chip()
 
+    def mm_to_px(self, mm: float) -> float:
+        return (mm / 25.4) * self.dpi
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.fit_socket_to_view()
+
+    def fit_socket_to_view(self):
+        items_bbox = self.scene.itemsBoundingRect()
+        padding_ratio = 0.1
+        pad_w = items_bbox.width() * padding_ratio
+        pad_h = items_bbox.height() * padding_ratio
+        padded_bbox = items_bbox.adjusted(-pad_w, -pad_h, pad_w, pad_h)
+        self.fitInView(padded_bbox, Qt.AspectRatioMode.KeepAspectRatio)
+
     def draw_socket(self):
-        self.scene.clear()
-        pin_size = 10
-        spacing = 5
         start_x = 50
         start_y = 20
 
-        for i in range(20):
-            for col in range(2):
-                pin_num = i + 1 + (col * 20)
-                x = start_x + col * (pin_size + 60)
-                y = start_y + i * (pin_size + spacing)
-                pin = QGraphicsRectItem(x, y, pin_size, pin_size)
+
+        number_of_pins_in_row = 20
+        number_of_rows = 2
+        pin_height = self.mm_to_px(1.3)
+        pin_width = self.mm_to_px(7)
+        vertical_spacing = self.mm_to_px(1.1)
+        horizontal_spacing = self.mm_to_px(4)
+        horizontal_padding = self.mm_to_px(2.1)
+        bottom_padding = self.mm_to_px(6.5)
+        top_padding = self.mm_to_px(8.5)
+        leaver_length = self.mm_to_px(17)
+        leaver_thickens = self.mm_to_px(1.5)
+        leaver_top_offset = self.mm_to_px(11)
+
+        # Drawn socket body
+        socket_width = pin_width * number_of_rows + horizontal_spacing + (horizontal_padding * 2)
+        socket_height = (pin_height + vertical_spacing) * number_of_pins_in_row - vertical_spacing
+        socket = QGraphicsRectItem(start_x, start_y+leaver_top_offset, socket_width, socket_height + top_padding + bottom_padding)
+        socket.setBrush(QBrush(Qt.GlobalColor.darkGreen))
+        self.scene.addItem(socket)
+
+        # Drawn leaver
+        leaver = QGraphicsRectItem(start_x, start_y, leaver_thickens, leaver_length)
+        leaver.setBrush(QBrush(Qt.GlobalColor.lightGray))
+        self.scene.addItem(leaver)
+
+
+        for i in range(number_of_pins_in_row):
+            for col in range(number_of_rows):
+                pin_num = i + 1 + (col * number_of_pins_in_row)
+                x = start_x + col * (pin_width + horizontal_spacing) + horizontal_padding
+                y = start_y + top_padding + leaver_top_offset + i * (pin_height + vertical_spacing)
+                pin = QGraphicsRectItem(x, y, pin_width, pin_height)
                 pin.setBrush(QBrush(Qt.GlobalColor.lightGray))
                 self.scene.addItem(pin)
 
                 label = QGraphicsTextItem(str(pin_num))
-                label.setPos(x + pin_size + 2, y - 2)
+                font = QFont()
+                font.setPointSize(round(self.mm_to_px(1.8)))  # Set desired point size
+                label.setFont(font)
+                text_rect = label.boundingRect()
+                if col == 0:
+                    x_pos = x - text_rect.width() - horizontal_padding
+                else:
+                    x_pos = x + pin_width + horizontal_padding
+                label.setPos(x_pos, y + (pin_height - text_rect.height()) / 2)
                 self.scene.addItem(label)
 
-    def draw_chip(self):
-        chip_pin_count = self.chip_pins
-        start_pin = self.socket_position
-        pins_per_side = chip_pin_count // 2
+        # After setting up your scene:
+        self.fit_socket_to_view()
 
-        pin_size = 10
-        spacing = 5
+    def draw_chip(self):
+        number_of_rows = 2 # @TODO make self. it is duplicit from drawn_socket
+        pin_width = self.mm_to_px(7) # @TODO make self. it is duplicit from drawn_socket
+        pin_height = self.mm_to_px(1.3)
+        horizontal_spacing = self.mm_to_px(4) # @TODO make self. it is duplicit from drawn_socket
+        horizontal_padding = self.mm_to_px(2.1) # @TODO make self. it is duplicit from drawn_socket
+        vertical_spacing = self.mm_to_px(1.1) # @TODO make self. it is duplicit from drawn_socket
+        leaver_top_offset = self.mm_to_px(11) # @TODO make self. it is duplicit from drawn_socket
+        top_padding = self.mm_to_px(8.5) # @TODO make self. it is duplicit from drawn_socket
+        chip_key_size = self.mm_to_px(1)
+        chip_key_padding = self.mm_to_px(0.5)
+        socket_width = pin_width * number_of_rows + horizontal_spacing + (horizontal_padding * 2) # @TODO make self. it is duplicit from drawn_socket
+
+        # DIP 8
+        #chip_height = self.mm_to_px(9.02)
+        # Calculate instead
+        pins_per_side = self.chip_pins // 2
+        chip_height = (pin_height + vertical_spacing) * pins_per_side
+
+        chip_width = self.mm_to_px(6.15)  # @TODO this needs to be defined by chip package...
+
+
+
+        start_pin = self.socket_position
+
+
         start_x = 50
-        col_spacing = pin_size + 60
         start_y = 20
 
         # Calculate vertical offset based on socket pin alignment
-        chip_offset = ((start_pin - 1) % 20) * (pin_size + spacing)
+        # We offset by vertical_spacing / 2 to top since chip_height have 1* vertical_spacing more and this is a good
+        # way to render chip body overlying pins
+        chip_offset = ((start_pin - 1) % 20) * (pin_height + vertical_spacing) + leaver_top_offset + top_padding - vertical_spacing / 2
 
-        chip_width = col_spacing
-        chip_height = (pin_size + spacing) * pins_per_side - spacing
+        # Set chip on center of socket in X dimension
+        x_position = start_x + (socket_width / 2) - (chip_width / 2)
 
-        chip_rect = QGraphicsRectItem(start_x, start_y + chip_offset, chip_width, chip_height)
-        chip_rect.setBrush(QBrush(QColor(0, 100, 200, 100)))
+        chip_rect = QGraphicsRectItem(x_position, start_y + chip_offset, chip_width, chip_height)
+        chip_rect.setBrush(QBrush(Qt.GlobalColor.black))
+        self.scene.addItem(chip_rect)
+
+        # Render chip pin 1 key
+        chip_rect = QGraphicsEllipseItem(x_position + chip_key_padding, start_y + chip_offset + chip_key_padding, chip_key_size, chip_key_size)
+        chip_rect.setBrush(QBrush(Qt.GlobalColor.gray))
         self.scene.addItem(chip_rect)
 
 
@@ -103,7 +180,8 @@ class PicProGUI(QMainWindow):
         control_layout.addWidget(self.chip_selector)
 
         # Replace label with graphics widget
-        self.socket_preview = SocketPreviewWidget(chip_pins=14, socket_position=10)
+        self.socket_preview = SocketPreviewWidget(chip_pins=8, socket_position=13)
+        #self.socket_preview = SocketPreviewWidget(chip_pins=40, socket_position=1)
         self.socket_preview.setFixedHeight(500)
         control_layout.addWidget(self.socket_preview)
 
