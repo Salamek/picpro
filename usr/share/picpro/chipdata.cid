@@ -2854,7 +2854,7 @@ CPwarn=N
 CALword=N
 BandGap=N
 ICSPonly=N
-ChipID=1420
+ChipID=2080
 LIST1 FUSE1 "WDT" "Enabled"=3FFF "Disabled"=3FFB
 LIST2 FUSE1 "PWRTE" "Disabled"=3FFF "Enabled"=3FF7
 LIST3 FUSE1 "BODEN" "Enabled"=3FFF "Disabled"=3FBF
@@ -6643,4 +6643,5 @@ LIST31 FUSE6 "ROM Table Write Protect" "18000-1BFFF Disabled"=FFFF "18000-1BFFF 
 LIST32 FUSE6 "ROM Table Write Protect" "1C000-1FFFF Disabled"=FFFF "1C000-1FFFF Enabled"=FFF7
 LIST33 FUSE6 "EEPROM Table Write Protect" "Disabled"=FFFF "Enabled"=7FFF
 LIST34 FUSE6 "CONFIG Table Write Protect" "Disabled"=FFFF "Enabled"=DFFF
+
 
