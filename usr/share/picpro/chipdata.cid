@@ -2837,6 +2837,34 @@ LIST11 FUSE1 "LVP" "Enabled"=3FFF "Disabled"=3F7F
 LIST12 FUSE2 "Fail Safe" "Enabled"=3FFF "Disabled"=3FFE
 LIST13 FUSE2 "Switch Over Mode" "Enabled"=3FFF "Disabled"=3FFD
 
+CHIPname=16F887
+INCLUDE=Y
+KITSRUS.COM=40pin
+EraseMode=5
+FlashChip=Y
+PowerSequence=VccVpp1
+ProgramDelay=10
+ProgramFlag2=1
+PanelSizing=7
+CoreType=bit14_E
+ROMsize=002000
+EEPROMsize=00000100
+FUSEblank=3FFF
+CPwarn=N
+CALword=N
+BandGap=N
+ICSPonly=N
+ChipID=2080
+LIST1 FUSE1 "WDT" "Enabled"=3FFF "Disabled"=3FFB
+LIST2 FUSE1 "PWRTE" "Disabled"=3FFF "Enabled"=3FF7
+LIST3 FUSE1 "BODEN" "Enabled"=3FFF "Disabled"=3FBF
+LIST4 FUSE1 "LVP" "Enabled"=3FFF "Disabled"=3F7F
+LIST5 FUSE1 "CPD" "Disabled"=3FFF "Enabled"=3EFF
+LIST6 FUSE1 "WRT Enable" "Enabled"=3FFF "WRT_256"=3DFF "WRT_1FOURTH"=3BFF "WRT_HALF"=39FF
+LIST7 FUSE1 "DEBUG" "Disabled"=3FFF "Enabled"=37FF
+LIST8 FUSE1 "Oscillator" "RC"=3FFF "HS"=3FFE "XT"=3FFD "LP"=3FFC
+LIST9 FUSE1 "Code Protect" "Disabled"=3FFF "Enabled"=1FFF
+
 CHIPname=16F818
 INCLUDE=Y
 KITSRUS.COM=18pin
@@ -6615,3 +6643,5 @@ LIST31 FUSE6 "ROM Table Write Protect" "18000-1BFFF Disabled"=FFFF "18000-1BFFF 
 LIST32 FUSE6 "ROM Table Write Protect" "1C000-1FFFF Disabled"=FFFF "1C000-1FFFF Enabled"=FFF7
 LIST33 FUSE6 "EEPROM Table Write Protect" "Disabled"=FFFF "Enabled"=7FFF
 LIST34 FUSE6 "CONFIG Table Write Protect" "Disabled"=FFFF "Enabled"=DFFF
+
+
