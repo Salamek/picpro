@@ -95,12 +95,12 @@ class ProgrammingInterface(IProgrammingInterface):
         """Write data to ROM.  data should be a binary string of data, high byte first."""
         cmd = 7
 
-        word_count = len(data) // 2
-        rom_size = self.chip_info.rom_size
-        if rom_size < word_count:
-            raise InvalidValueError('Data too large for PIC ROM {} > {}.'.format(word_count, rom_size))
+        data_len = len(data)
+        rom_size_bytes = self.chip_info.rom_size * 2
+        if rom_size_bytes < data_len:
+            raise InvalidValueError('Data too large for PIC ROM {} bytes > {} bytes.'.format(data_len, rom_size_bytes))
 
-        if ((word_count * 2) % 32) != 0:
+        if (data_len % 32) != 0:
             raise InvalidValueError('ROM data must be a multiple of 32 bytes in size.')
 
         self.connection.command_start()
@@ -108,12 +108,12 @@ class ProgrammingInterface(IProgrammingInterface):
 
         self.connection.serial_connection.write(cmd.to_bytes(1, 'little'))
 
-        word_count_message = struct.pack('>H', word_count)
+        word_count_message = struct.pack('>H', int(data_len / 2)) # We need to send this in words
         self.connection.serial_connection.write(word_count_message)
         self.connection.expect(b'Y', timeout=20)
 
         try:
-            for i in range(0, (word_count * 2), 32):
+            for i in range(0, data_len, 32):
                 to_write = data[i:(i + 32)]
                 self.connection.serial_connection.write(to_write)
                 self.connection.expect(b'Y', timeout=20)
