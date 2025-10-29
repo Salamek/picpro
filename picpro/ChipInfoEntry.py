@@ -43,7 +43,7 @@ class ChipInfoEntry:
         'bit12_b': 11,
         'bit14_h': 12,
         'bit16_c': 13,
-        'newf12b': None  # !FIXME Not in docs
+        'newf12b': 11 # From microbrn.exe dump, sends 11 for this core
     }
 
     _power_sequence_dict = {
