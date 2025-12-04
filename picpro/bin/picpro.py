@@ -364,6 +364,16 @@ def hex_info() -> None:
         print('Please verify that the file exists and that you have access to it.')
         return None
 
+    # Verify if the programmer protocol is compatible with the protocol
+    # implemented in this software (protocol 'P18A').
+    software_protocol = b'P18A'
+    programmer_protocol_str = protocol_interface.programmer_protocol()
+    print("Checking the protocol of the programmer...")
+    if programmer_protocol_str != software_protocol:
+        exception_msg = "The firmware of the programmer is incompatible with this software."
+        exception_msg += " Update the programmer firmware to use the protocol {}.".format(software_protocol)
+        raise ValueError(exception_msg)
+
     # Get chip info
     try:
         chip_info_reader = ChipInfoReader(_find_chip_data())
