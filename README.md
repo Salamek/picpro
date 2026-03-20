@@ -77,6 +77,7 @@ Usage:
     picpro chipinfo [<PIC_TYPE>]
     picpro hexinfo <HEX_FILE> <PIC_TYPE>
     picpro (-h | --help)
+    picpro (-v | --version)
 
 
 Options:
@@ -88,6 +89,7 @@ Options:
     -i HEX_FILE --hex_file=HEX_FILE  Hex file to flash or to read.
     -o HEX_FILE --hex_file=HEX_FILE  Hex file to write.
     --binary                         Input/Output file is in binary.
+    -v --version                     Display version info
 
 ```
 
