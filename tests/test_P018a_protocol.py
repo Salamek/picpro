@@ -62,12 +62,12 @@ def test_get_programming_interface(mock_connection: Connection, chip_info_entry:
 
 def test_set_programming_voltages_command_true(mock_programming_interface: ProgrammingInterface) -> None:
     mock_programming_interface.connection.command_start()
-    mock_programming_interface.set_programming_voltages_command(True)
+    mock_programming_interface.set_programming_voltages_command(on=True)
     mock_programming_interface.connection.command_end()
 
 def test_set_programming_voltages_command_false(mock_programming_interface: ProgrammingInterface) -> None:
     mock_programming_interface.connection.command_start()
-    mock_programming_interface.set_programming_voltages_command(False)
+    mock_programming_interface.set_programming_voltages_command(on=False)
     mock_programming_interface.connection.command_end()
 
 

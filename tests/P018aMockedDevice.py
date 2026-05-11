@@ -56,22 +56,28 @@ class ProgramingVars:  # @TODO use this in code too
         ) = struct.unpack('>HHBBBBBBB', data)
 
         if not rom_size_words:
-            raise ValueError('rom_size_words cannot be empty')
+            msg = 'rom_size_words cannot be empty'
+            raise ValueError(msg)
 
         if rom_size_words % 32 != 0:
-            raise ValueError('rom_size_words has to be multiple of 32')
+            msg = 'rom_size_words has to be multiple of 32'
+            raise ValueError(msg)
 
         if eeprom_size and eeprom_size % 32 != 0:
-            raise ValueError('eeprom_size has to be multiple of 32')
+            msg = 'eeprom_size has to be multiple of 32'
+            raise ValueError(msg)
 
         if core_type not in range(1, 14):  # note: 13 is max
-            raise ValueError('Unknown core_type')
+            msg = 'Unknown core_type'
+            raise ValueError(msg)
 
         if power_sequence not in range(5):  # note: 13 is max
-            raise ValueError('Unknown power_sequence')
+            msg = 'Unknown power_sequence'
+            raise ValueError(msg)
 
         if not program_retries:
-            raise ValueError('program_retries has to be at least 1')
+            msg = 'program_retries has to be at least 1'
+            raise ValueError(msg)
 
         return cls(
             rom_size_words=rom_size_words,
@@ -104,15 +110,13 @@ class P018aMockedDeviceThread:
     in_jump_table: bool
     is_programming_voltages_on: bool
     programing_vars: ProgramingVars | None
-    def __init__(self, device: 'P018aMockedDevice'):
+    def __init__(self, device: 'P018aMockedDevice') -> None:
         self.device = device
         self.is_programming_voltages_on = False
         self.in_jump_table = False
         self.programing_vars = None
 
     def read(self, count: int = 1, timeout: float | None = 5) -> bytes:
-
-        # _read(count, timeout)
         # Read bytes from the port.  Stop when the requested number of
         # bytes have been received, or the timeout has passed.  In order
         # to sidestep issues with the serial library this is done by
@@ -152,7 +156,7 @@ class P018aMockedDeviceThread:
         # Now it starts sending the rom data in 32byte packets
         number_of_packets = int(send_rom_size / 32)
         received_rom_data = b''
-        for i in range(number_of_packets):
+        for _i in range(number_of_packets):
             received_rom_data += self.read(32)
             self.write(b'Y')
 
@@ -179,7 +183,7 @@ class P018aMockedDeviceThread:
         # Now read Eeprom in 2? bytes wtf? why? (due to minimal eeprom size to be 2 bytes in PIC? huh?
         eeprom_packets = int(send_eeprom_size / 2)
         received_eeprom_data = b''
-        for i in range(eeprom_packets):
+        for _i in range(eeprom_packets):
             received_eeprom_data += self.read(2)
             self.write(b'Y')
 
@@ -206,7 +210,7 @@ class P018aMockedDeviceThread:
         # @TODO implement FuseTransaction
         self.write(b'Y')
 
-    def listen_for_commands(self) -> None:
+    def listen_for_commands(self) -> None:  # noqa: PLR0912
         while self.device.is_open:
             data = self.read()
             if self.in_jump_table:

@@ -1,11 +1,12 @@
 import time
 from types import TracebackType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 import serial
 
 from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.exceptions import InvalidResponseError
+from picpro.protocol.enums import HeaderEnum, ResponseEnum
 
 if TYPE_CHECKING:
     from picpro.protocol.IProgrammingInterface import IProgrammingInterface
@@ -14,7 +15,7 @@ if TYPE_CHECKING:
 class IConnection:
     detected_programmer_version: int
 
-    def __init__(self, port: str):
+    def __init__(self, port: str) -> None:
         try:
             self.serial_connection = serial.Serial(
                 port=port,
@@ -27,12 +28,12 @@ class IConnection:
                 rtscts=False,
             )
         except serial.SerialException as e:
-            raise ConnectionError(f'Unable to open serial port "{port}".') from e
+            msg = f'Unable to open serial port "{port}".'
+            raise ConnectionError(msg) from e
 
         self.reset()
 
     def read(self, count: int = 1, timeout: float | None = 5) -> bytes:
-        # _read(count, timeout)
         # Read bytes from the port.  Stop when the requested number of
         # bytes have been received, or the timeout has passed.  In order
         # to sidestep issues with the serial library this is done by
@@ -49,13 +50,15 @@ class IConnection:
 
         return result
 
-    def expect(self, expected: bytes, timeout: float | None = 5, send_command_end: bool = False) -> None:
+    def expect(self, expected_response: ResponseEnum, timeout: float | None = 5, *, send_command_end: bool = False) -> None:
         """Raise an exception if the expected response byte is not sent by the PIC programmer before timeout."""
+        expected = expected_response.value
         response = self.read(len(expected), timeout=timeout)
         if send_command_end:
             self.command_end()
         if response != expected:
-            raise InvalidResponseError(f'Expected "{expected!r}", received {response!r}.')
+            msg = f'Expected "{expected!r}", received {response!r}.'
+            raise InvalidResponseError(msg)
 
     def command_start(self, cmd: int | None = None) -> None:
         # Send command 1: if we're at the jump table already this will
@@ -63,16 +66,17 @@ class IConnection:
         # still echo 'Q' and await another command start.
 
         self.serial_connection.write(b'\x01')
-        self.expect(b'Q')
+        self.expect(ResponseEnum.WAITING_FOR_COMMAND)
 
         # Start command, go to jump table.
         self.serial_connection.write(b'P')
 
         # Check for acknowledgement
         ack = self.read(1)
-        result = ack == b'P'
+        result = ResponseEnum(ack) == ResponseEnum.AT_COMMAND_JUMP_TABLE
         if not result:
-            raise InvalidResponseError('No acknowledgement for command start.')
+            msg = 'No acknowledgement for command start.'
+            raise InvalidResponseError(msg)
 
         # Send command number, if specified
         if cmd is not None:
@@ -82,11 +86,13 @@ class IConnection:
         cmd = b'\x01'
         self.serial_connection.write(cmd)
         ack = self.read(1, timeout=10)
-        result = ack == b'Q'
+        result = ResponseEnum(ack) == ResponseEnum.WAITING_FOR_COMMAND
         if not result:
-            if ack != b'':
-                raise InvalidResponseError(f'Unexpected response ("{ack!r}") in command end.')
-            raise InvalidResponseError('No acknowledgement for command end.')
+            if ack:
+                msg = f'Unexpected response ("{ack!r}") in command end.'
+                raise InvalidResponseError(msg)
+            msg = 'No acknowledgement for command end.'
+            raise InvalidResponseError(msg)
         return result
 
     def reset(self) -> bool:
@@ -101,14 +107,15 @@ class IConnection:
         # then the unit is now on, and we should be seeing a 2 byte
         # response.
         response = self.read(2, timeout=.3)
-        if response == b'':
+        if not response:
             # Apparently the unit operates with DTR high, so...
             self.serial_connection.dtr = True
             time.sleep(.1)
             response = self.read(2, timeout=.3)
 
-        if len(response) >= 1:
-            result = response[0].to_bytes(1, 'little') == b'B'
+        if len(response) > 1:
+            response_header = HeaderEnum(response[0].to_bytes(1, 'little'))
+            result = response_header == HeaderEnum.PROGRAMMER_VERSION
         else:
             result = False
 
@@ -160,13 +167,13 @@ class IConnection:
     def expected_programmer_protocol(self) -> bytes:
         raise NotImplementedError
 
-    def get_programming_interface(self, chip_info: ChipInfoEntry, icsp_mode: bool = False) -> 'IProgrammingInterface':
+    def get_programming_interface(self, chip_info: ChipInfoEntry, *, icsp_mode: bool = False) -> 'IProgrammingInterface':
         raise NotImplementedError
 
     def close(self) -> None:
         self.serial_connection.close()
 
-    def __enter__(self) -> 'IConnection':
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, exc_type: type[BaseException] | None,

@@ -51,7 +51,7 @@ import sys
 from collections.abc import Callable
 from functools import wraps
 from pathlib import Path
-from typing import Any
+from typing import TypeVar
 
 import yaml
 from docopt import docopt
@@ -59,7 +59,6 @@ from intelhex import IntelHex
 from yaml import ScalarNode
 
 import picpro as app_root
-from picpro import __version__
 from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.ChipInfoReader import ChipInfoReader
 from picpro.exceptions import FuseError, InvalidResponseError
@@ -69,16 +68,17 @@ from picpro.protocol.IProgrammingInterface import IProgrammingInterface
 from picpro.protocol.p18a.Connection import Connection
 from picpro.tools import swab_bytes
 
-APP_ROOT_FOLDER = os.path.abspath(os.path.dirname(app_root.__file__))
+APP_ROOT_FOLDER = Path(app_root.__file__).parent
 
 OPTIONS = docopt(__doc__)
 
+CT = TypeVar('CT')
+
 if OPTIONS['--version']:
-    print(__version__)
     sys.exit(0)
 
 
-def command(name: str | None = None) -> Callable:
+def command(name: str | None = None) -> Callable[[Callable[..., CT]], Callable[..., CT]]:
     """Decorator that registers the chosen command/function.
 
     If a function is decorated with @command but that function name is not a valid "command" according to the docstring,
@@ -94,23 +94,26 @@ def command(name: str | None = None) -> Callable:
     by this decorator function, and set as the attribute `chosen`. It is then executed below in
     `if __name__ == '__main__':`.
 
+    Doing this instead of using Flask-Script.
+
     Positional arguments:
     func -- the function to decorate
     """
 
-    def function_wrap(func: Callable) -> Callable:
+    def function_wrap(func: Callable[..., CT]) -> Callable[..., CT]:
 
         @wraps(func)
-        def wrapped() -> Callable:
+        def wrapped() -> CT:
             return func()
 
         command_name = name or func.__name__
 
         # Register chosen function.
         if command_name not in OPTIONS:
-            raise KeyError(f'Cannot register {command_name}, not mentioned in docstring/docopt.')
+            msg = f'Cannot register {command_name}, not mentioned in docstring/docopt.'
+            raise KeyError(msg)
         if OPTIONS[command_name]:
-            command.chosen = func  # type: ignore
+            command.chosen = func  # type: ignore[attr-defined]
 
         return wrapped
 
@@ -118,22 +121,23 @@ def command(name: str | None = None) -> Callable:
 
 
 def _find_chip_data() -> Path:
-    path_list = [
-        os.path.abspath(os.path.join(APP_ROOT_FOLDER, '..', 'usr', 'share', 'picpro', 'chipdata.cid')),
-        os.path.join('/', 'usr', 'share', 'picpro', 'chipdata.cid'),
-        os.path.join(APP_ROOT_FOLDER, 'chipdata.cid'),
+    path_list: list[Path] = [
+        APP_ROOT_FOLDER.joinpath('..', 'usr', 'share', 'picpro', 'chipdata.cid').absolute(),
+        Path('/', 'usr', 'share', 'picpro', 'chipdata.cid'),
+        APP_ROOT_FOLDER.joinpath('chipdata.cid'),
     ]
 
     if os.name == 'nt':
         local_app_data = os.getenv('LOCALAPPDATA')
         if local_app_data:
             # windows path
-            path_list.append(os.path.abspath(os.path.join(local_app_data, 'picpro', 'chipdata.cid')))
+            path_list.append(Path(local_app_data) / 'picpro' / 'chipdata.cid')
 
-    chip_data_files = [f for f in path_list if os.path.exists(f)]
+    chip_data_files = [f for f in path_list if f.is_file()]
 
     if len(chip_data_files) == 0:
-        raise ValueError("File 'chipdata.cid' was not found in any search path.")
+        msg = "File 'chipdata.cid' was not found in any search path."
+        raise ValueError(msg)
 
     return Path(chip_data_files[0])
 
@@ -154,10 +158,7 @@ def _verify_pipeline(
     else:
         no_of_zeros = pic_rom_data.count(b'\x00')
         pic_rom_data_len = len(pic_rom_data)
-        if chip_info_entry.cal_word:
-            is_maybe_locked = pic_rom_data_len - 2 == no_of_zeros
-        else:
-            is_maybe_locked = pic_rom_data_len == no_of_zeros
+        is_maybe_locked = pic_rom_data_len - 2 == no_of_zeros if chip_info_entry.cal_word else pic_rom_data_len == no_of_zeros
 
         print('ROM verification failed.')
         if is_maybe_locked:
@@ -279,7 +280,7 @@ def verify() -> None:
 @command()
 def dump() -> None:
     mem_type = OPTIONS['<mem_type>']
-    output_file = OPTIONS['--hex_file']
+    output_file = Path(OPTIONS['--hex_file'])
     try:
         chip_info_reader = ChipInfoReader(_find_chip_data())
         chip_info_entry = chip_info_reader.get_chip(OPTIONS['--pic_type'])
@@ -300,17 +301,18 @@ def dump() -> None:
                     print(f'Reading CONFIG into file {output_file}...')
                     content = programming_interface.read_config().to_bytes()
                 else:
-                    raise ValueError('Unknown memory type.')
+                    msg = 'Unknown memory type.'
+                    raise ValueError(msg)
 
                 if OPTIONS['--binary']:
                     # Binary dump requested
-                    with open(output_file, 'wb') as binary_file:
+                    with output_file.open('wb') as binary_file:
                         binary_file.write(content)
                 else:
                     intel_hex = IntelHex()
                     intel_hex.frombytes(content)
 
-                    with open(output_file, 'w', encoding='ascii') as file:
+                    with output_file.open('w', encoding='ascii') as file:
                         intel_hex.write_hex_file(file)
                 print('Done!')
     except OSError:
@@ -344,10 +346,7 @@ def chip_info() -> None:
     chip_info_filename = _find_chip_data()
     chip_info_reader = ChipInfoReader(chip_info_filename)
 
-    if pic_type:
-        data = chip_info_reader.get_chip(pic_type).to_dict()
-    else:
-        data = {chip_name: entry.to_dict() for chip_name, entry in chip_info_reader.chip_entries.items()}
+    data = chip_info_reader.get_chip(pic_type).to_dict() if pic_type else {chip_name: entry.to_dict() for chip_name, entry in chip_info_reader.chip_entries.items()}
 
     print(json.dumps(data))
 
@@ -404,7 +403,8 @@ def hex_info() -> None:
         elif keys == ['EIP']:
             entry = intel_hex.start_addr['EIP']
         else:
-            raise RuntimeError("Unknown 'IntelHex.start_addr' found.")
+            msg = "Unknown 'IntelHex.start_addr' found."
+            raise RuntimeError(msg)
         print(f'{indent_char:s}entry: 0x{entry:08X}')
     segments = intel_hex.segments()
     if segments:
@@ -473,7 +473,7 @@ def chipdata_migrate() -> None:
     chip_info_reader = ChipInfoReader(_find_chip_data())
     output_dir = Path('./usr/share/picpro/chip-data.d')
 
-    def hex_string_representer(dumper: yaml.Dumper, data: Any) -> ScalarNode:
+    def hex_string_representer(dumper: yaml.Dumper, data: str) -> ScalarNode:
         if isinstance(data, str) and data.startswith('0x'):
             return dumper.represent_scalar('tag:yaml.org,2002:int', hex(int(data, 16)))
         return dumper.represent_scalar('tag:yaml.org,2002:str', data)
@@ -499,11 +499,7 @@ def chipdata_migrate() -> None:
             data['chip_id'] = hex(chip_entry.chip_id)
             data['core_type'] = chip_entry.core_type.lower()
             data['chip_name'] = chip_name_lower
-            try:
-                data['socket_image'] = socket_image_to_dip[chip_entry.socket_image] if not chip_entry.icsp_only else None
-            except KeyError:
-                print(chip_name)
-                raise
+            data['socket_image'] = socket_image_to_dip[chip_entry.socket_image] if not chip_entry.icsp_only else None
             data['rom_size_words'] = data['rom_size']  # @TODO remove?
             data['rom_size'] = data['rom_size'] * 2 # Conver to bytes from words
 
@@ -519,9 +515,7 @@ def chipdata_migrate() -> None:
             for fuse_name, fuse_options in chip_entry.fuses.items():
                 for option_name, options in fuse_options.items():
                     fuses.setdefault(fuse_name, {})
-                    option_values = {}
-                    for option_index, option_value in options:
-                        option_values[option_index] = option_value
+                    option_values = dict(options)
                     fuses[fuse_name].setdefault(option_name, option_values)
 
             data['fuses'] = fuses
@@ -531,7 +525,8 @@ def chipdata_migrate() -> None:
 
 def main() -> None:
     signal.signal(signal.SIGINT, lambda _signal, _frame: sys.exit(0))  # Properly handle Control+C
-    command.chosen()  # Execute the function specified by the user.
+    if hasattr(command, 'chosen'):
+        command.chosen()  # Execute the function specified by the user.
 
 
 if __name__ == '__main__':

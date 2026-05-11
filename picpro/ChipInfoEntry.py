@@ -1,5 +1,6 @@
 import dataclasses
 import functools
+from typing import ClassVar
 
 from picpro.exceptions import FuseError
 from picpro.ProgrammingVariables import ProgrammingVariables
@@ -30,7 +31,7 @@ class ChipInfoEntry:
     chip_id: int
     fuses: dict
 
-    _core_type_dict = {
+    _core_type_dict: ClassVar[dict[str, int]] = {
         'bit16_a': 1,
         'bit16_b': 2,
         'bit14_g': 3,
@@ -47,7 +48,7 @@ class ChipInfoEntry:
         'newf12b': 11, # From microbrn.exe dump, sends 11 for this core
     }
 
-    _power_sequence_dict = {
+    _power_sequence_dict: ClassVar[dict[str, int]] = {
         'Vcc': 0,
         'VccVpp1': 1,
         'VccVpp2': 2,
@@ -57,7 +58,7 @@ class ChipInfoEntry:
         'VccFastVpp2': 2,
     }
 
-    _vcc_vpp_delay_dict = {
+    _vcc_vpp_delay_dict: ClassVar[dict[str, bool]] = {
         'Vcc': False,
         'VccVpp1': False,
         'VccVpp2': False,
@@ -67,7 +68,7 @@ class ChipInfoEntry:
         'VccFastVpp2': True,
     }
 
-    _socket_image_dict = {
+    _socket_image_dict: ClassVar[dict[str, str]] = {
         '8pin': 'socket pin 13',
         '14pin': 'socket pin 13',
         '18pin': 'socket pin 2',
@@ -103,7 +104,8 @@ class ChipInfoEntry:
         """Returns a ProgrammingVars"""
         core_type_int = self._core_type_dict.get(self.core_type)
         if not core_type_int:
-            raise ValueError('Failed to identify core_type.')
+            msg = 'Failed to identify core_type.'
+            raise ValueError(msg)
 
         return ProgrammingVariables(
             rom_size=self.rom_size,
@@ -132,7 +134,8 @@ class ChipInfoEntry:
         if self.core_type in ['bit12_a', 'bit12_b', 'newf12b']:
             return 12
 
-        raise ValueError('Failed to detect core bits.')
+        msg = 'Failed to detect core bits.'
+        raise ValueError(msg)
 
     def decode_fuse_data(self, fuse_values: list) -> dict:
         """Given a list of fuse values, return a dict of symbolic
@@ -157,30 +160,30 @@ class ChipInfoEntry:
             for setting in fuse_settings:
                 setting_value = fuse_settings[setting]
 
-                if indexwise_and(fuse_values, setting_value) == fuse_values:
+                if indexwise_and(fuse_values, setting_value) == fuse_values and indexwise_and(best_value, setting_value) != best_value:
                     # If this setting value clears more bits than
                     # best_value, it's our new best value.
-                    if indexwise_and(best_value, setting_value) != best_value:
-                        best_value = indexwise_and(best_value, setting_value)
-                        result[fuse_param] = setting
-                        fuse_identified = True
+                    best_value = indexwise_and(best_value, setting_value)
+                    result[fuse_param] = setting
+                    fuse_identified = True
             if not fuse_identified:
-                raise FuseError('Could not identify fuse setting.')
+                msg = 'Could not identify fuse setting.'
+                raise FuseError(msg)
 
         return result
 
     def encode_fuse_data(self, fuse_dict: dict) -> list:
         result = list(self.fuse_blank)
         fuse_param_list = self.fuses
-        for fuse in fuse_dict:
-            fuse_value = fuse_dict[fuse]
-
+        for fuse, fuse_value in fuse_dict.items():
             if fuse not in fuse_param_list:
-                raise FuseError(f'Unknown fuse "{fuse}".')
+                msg = f'Unknown fuse "{fuse}".'
+                raise FuseError(msg)
             fuse_settings = fuse_param_list[fuse]
 
             if fuse_value not in fuse_settings:
-                raise FuseError(f'Invalid fuse setting: "{fuse}" = "{fuse_value}"')
+                msg = f'Invalid fuse setting: "{fuse}" = "{fuse_value}"'
+                raise FuseError(msg)
 
             result = indexwise_and(result, fuse_settings[fuse_value])
 

@@ -1,6 +1,7 @@
 import struct
 
 from picpro.ChipInfoEntry import ChipInfoEntry
+from picpro.protocol.enums import ResponseEnum
 from picpro.protocol.IConnection import IConnection
 from picpro.protocol.IProgrammingInterface import IProgrammingInterface
 from picpro.protocol.p014.ProgrammingInterface import ProgrammingInterface
@@ -14,18 +15,18 @@ class Connection(IConnection):
         """Blocks until a chip is inserted in the programming socket."""
         cmd = 19
         self.command_start(cmd)
-        self.expect(b'A')
+        self.expect(ResponseEnum.WAITING_FOR_ACTION)
 
-        self.expect(b'Y', timeout=None, send_command_end=True)
+        self.expect(ResponseEnum.YES, timeout=None, send_command_end=True)
 
     def wait_until_chip_out_of_socket(self) -> None:
         """Blocks until chip is removed from programming socket."""
         cmd = 20
 
         self.command_start(cmd)
-        self.expect(b'A')
+        self.expect(ResponseEnum.WAITING_FOR_ACTION)
 
-        self.expect(b'Y', timeout=None, send_command_end=True)
+        self.expect(ResponseEnum.YES, timeout=None, send_command_end=True)
 
     def programmer_version(self) -> int:
         """Returns the PIC programmer's numeric version.
@@ -51,5 +52,5 @@ class Connection(IConnection):
         self.command_end()
         return response
 
-    def get_programming_interface(self, chip_info: ChipInfoEntry, icsp_mode: bool = False) -> IProgrammingInterface:
-        return ProgrammingInterface(self, chip_info, icsp_mode)
+    def get_programming_interface(self, chip_info: ChipInfoEntry, *, icsp_mode: bool = False) -> IProgrammingInterface:
+        return ProgrammingInterface(self, chip_info, icsp_mode=icsp_mode)

@@ -41,7 +41,7 @@ class FlashData:
 
     _memory_mapping: MemoryMapping
 
-    def __init__(self, chip_info: ChipInfoEntry, hex_file: IntelHex, pic_id: str | None = None, fuses: dict | None = None):
+    def __init__(self, chip_info: ChipInfoEntry, hex_file: IntelHex, pic_id: str | None = None, fuses: dict | None = None) -> None:
         self.chip_info = chip_info
         self.hex_file = hex_file
         self.pic_id = pic_id
@@ -52,7 +52,7 @@ class FlashData:
         self.id_buffer = None
 
         self._rom_blank_word = self._calculate_rom_blank_word()
-        self._fuse_data_blank = b''.join(map(lambda word: struct.pack('>H', word), self.chip_info.fuse_blank))
+        self._fuse_data_blank = b''.join(struct.pack('>H', word) for word in self.chip_info.fuse_blank)
 
         # Set memory map based on PIC architecture family
         # ROM region is always dynamic based on actual chip ROM size
@@ -91,19 +91,21 @@ class FlashData:
         buf = bytearray()
         raw_size = 0
         for index, address in enumerate(range(start, end)):
-            found = self.hex_file._buf.get(address)
+            found = self.hex_file._buf.get(address)  # noqa: SLF001
             if found is not None:
                 raw_size += 1
 
             if max_size is not None and found and index > max_size:
-                raise ValueError('Range contains data over expected max_size')
+                msg = 'Range contains data over expected max_size'
+                raise ValueError(msg)
 
             if max_size is None or index < max_size:
                 buf.append(found if found is not None else pad_callback(address, index))
 
         result_len = len(buf)
         if result_len % 2 != 0:
-            raise ValueError(f'Result should have even len! ({result_len} % 2 != 0)')
+            msg = f'Result should have even len! ({result_len} % 2 != 0)'
+            raise ValueError(msg)
 
         return PaddedBuffer(
             data=bytes(buf),
@@ -123,40 +125,40 @@ class FlashData:
             start=self._memory_mapping.rom.start,
             end=self._memory_mapping.rom.end,
             max_size=(self.chip_info.rom_size * 2), # Makes _tobinarray_really to rise ValueError if there are data in given range over expected size of chip
-            pad_callback=lambda adr, i: rom_blank_word[i % 2],  # LoL, i % 2 returns 1/0 and rom_blank_word are two bytes with index 0 and 1 ;)
+            pad_callback=lambda _adr, i: rom_blank_word[i % 2],  # LoL, i % 2 returns 1/0 and rom_blank_word are two bytes with index 0 and 1 ;)
         )
 
         self.eeprom_buffer = self._tobinarray_really(
             start=self._memory_mapping.eeprom.start,
             end=self._memory_mapping.eeprom.end,
             max_size=self.chip_info.eeprom_size,
-            pad_callback=lambda adr, i: 0x0FF,
+            pad_callback=lambda _adr, _i: 0x0FF,
         )
 
         self.config_buffer = self._tobinarray_really(
             start=self._memory_mapping.config.start,
             end=self._memory_mapping.config.end,
-            pad_callback=lambda adr, i: 0x000,
+            pad_callback=lambda _adr, _i: 0x000,
         )
 
         if self.chip_info.core_bits == 16:
             self.fuse_buffer = self._tobinarray_really(
                 start=0x300000,
                 end=0x30000e,
-                pad_callback=lambda adr, i: self._fuse_data_blank[i],
+                pad_callback=lambda _adr, i: self._fuse_data_blank[i],
             )
         else:
             self.fuse_buffer = self._tobinarray_really(
                 start=0x400e,
                 end=0x4010,
-                pad_callback=lambda adr, i: self._fuse_data_blank[i],
+                pad_callback=lambda _adr, i: self._fuse_data_blank[i],
             )
 
         if self._memory_mapping.id:
             self.id_buffer = self._tobinarray_really(
                 start=self._memory_mapping.id.start,
                 end=self._memory_mapping.id.end,
-                pad_callback=lambda adr, i: 0x000,
+                pad_callback=lambda _adr, _i: 0x000,
             )
 
     def _is_little_endian(self) -> bool:
@@ -174,7 +176,8 @@ class FlashData:
                 if le_ok and not be_ok:
                     return True
                 if not (le_ok or be_ok):
-                    raise ValueError('Invalid ROM word.')
+                    msg = 'Invalid ROM word.'
+                    raise ValueError(msg)
         return False
 
     def process(self) -> None:
@@ -189,22 +192,14 @@ class FlashData:
             if self.id_buffer:
                 self.id_buffer.swab_bytes()
 
-
-        # pick_byte = 0 if is_swap_bytes else 1
-        # self.eeprom_records = [
-        #     (int(0x4200 + ((rec[0] - 0x4200) / 2)),
-        #     bytes([rec[1][i] for i in range(pick_byte, len(rec[1]), 2)]))
-        #     for rec in self.eeprom_records
-        # ]
-
-
         # check Fuses
         if self.fuses:
             self.chip_info.encode_fuse_data(self.fuses)
 
     def set_calibration_word(self, calibration_word: bytes | None = None) -> None:
         if not self.chip_info.cal_word:
-            raise ValueError('This chip does not have calibration in ROM data')
+            msg = 'This chip does not have calibration in ROM data'
+            raise ValueError(msg)
 
         self.calibration_word = calibration_word
 

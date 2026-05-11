@@ -5,6 +5,7 @@ from pathlib import Path
 from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.exceptions import FormatError
 
+log = logging.getLogger(__name__)
 
 def handle_hex(input_str: str) -> int:
     return int(input_str, 16)
@@ -33,7 +34,7 @@ def handle_bool(input_str: str) -> bool | None:
 
 
 class ChipInfoReader:
-    chip_entries: dict[str, ChipInfoEntry] = {}
+    chip_entries: dict[str, ChipInfoEntry]
     assignment_regexp = re.compile(r'^(\S+)\s*=\s*(.*)\s*$')
     fuse_value_regexp = re.compile(r'"([^"]*)"\s*=\s*([0-9a-fA-F]+(?:&[0-9a-fA-F]+)*)')
     fuse_list_regexp = re.compile(r'^LIST\d+\s+FUSE(?P<fuse>\d)\s+"(?P<name>[^"]*)"\s*(?P<values>.*)$')
@@ -41,32 +42,10 @@ class ChipInfoReader:
 
     # Class for reading chipinfo files, which provide information about different types of PICs.
 
-    chip_info_key_replacements = {
-        'CHIPname': 'chip_name',
-        'BandGap': 'band_gap',
-        'INCLUDE': 'include',
-        'SocketImage': 'socket_image',
-        'KITSRUS.COM': 'socket_image',
-        'PowerSequence': 'power_sequence',
-        'CALword': 'cal_word',
-        'ChipID': 'chip_id',
-        'CoreType': 'core_type',
-        'CPwarn': 'cp_warn',
-        'EEPROMsize': 'eeprom_size',
-        'EraseMode': 'erase_mode',
-        'FlashChip': 'flash_chip',
-        'FUSEblank': 'fuse_blank',
-        'ICSPonly': 'icsp_only',
-        'OverProgram': 'over_program',
-        'ProgramDelay': 'program_delay',
-        'ProgramTries': 'program_tries',
-        'ROMsize': 'rom_size',
-        'ProgramFlag2': 'program_flag_2',
-        'PanelSizing': 'panel_sizing',
-    }
 
-    def __init__(self, file_path: Path):
-        self.special_handlers = {
+    def __init__(self, file_path: Path) -> None:
+        self.chip_entries = {}
+        self._special_handlers = {
             'chip_name': handle_lower,
             'band_gap': handle_bool,
             'cal_word': handle_bool,
@@ -84,6 +63,31 @@ class ChipInfoReader:
             'rom_size': handle_hex,
             'include': handle_bool,
         }
+
+        self._chip_info_key_replacements = {
+            'CHIPname': 'chip_name',
+            'BandGap': 'band_gap',
+            'INCLUDE': 'include',
+            'SocketImage': 'socket_image',
+            'KITSRUS.COM': 'socket_image',
+            'PowerSequence': 'power_sequence',
+            'CALword': 'cal_word',
+            'ChipID': 'chip_id',
+            'CoreType': 'core_type',
+            'CPwarn': 'cp_warn',
+            'EEPROMsize': 'eeprom_size',
+            'EraseMode': 'erase_mode',
+            'FlashChip': 'flash_chip',
+            'FUSEblank': 'fuse_blank',
+            'ICSPonly': 'icsp_only',
+            'OverProgram': 'over_program',
+            'ProgramDelay': 'program_delay',
+            'ProgramTries': 'program_tries',
+            'ROMsize': 'rom_size',
+            'ProgramFlag2': 'program_flag_2',
+            'PanelSizing': 'panel_sizing',
+        }
+
 
         # Open file and split it into data blocks, so we can process data in blocks
         with file_path.open('r', encoding='UTF-8') as file:
@@ -115,24 +119,26 @@ class ChipInfoReader:
                 except FormatError as e:
                     # Destroy this block
                     block = None
-                    logging.exception('Parsing of line %s failed, ignoring whole block...', line_number, exc_info=e)
+                    log.exception('Parsing of line %s failed, ignoring whole block...', line_number, exc_info=e)
 
     def parse_line(self, block: dict, line: str, line_number: int) -> None:
         match_assignment_regexp = self.assignment_regexp.match(line)
         if match_assignment_regexp:
             lhs_raw, rhs = match_assignment_regexp.groups()
-            lhs = self.chip_info_key_replacements.get(lhs_raw)
+            lhs = self._chip_info_key_replacements.get(lhs_raw)
             if lhs is None:
-                raise FormatError(f'Key replacement is None for {lhs_raw}.')
+                msg = f'Key replacement is None for {lhs_raw}.'
+                raise FormatError(msg)
             try:
-                found_special_handler = self.special_handlers.get(lhs)
+                found_special_handler = self._special_handlers.get(lhs)
                 if found_special_handler:
                     block[lhs] = found_special_handler(rhs.lower())
                 else:
                     block[lhs] = rhs
             except NameError as e:
                 # Some extraneous line in the file...  do we care?
-                raise FormatError(f'Assignment outside of chip definition @{line_number}: {line}.') from e
+                msg = f'Assignment outside of chip definition @{line_number}: {line}.'
+                raise FormatError(msg) from e
 
         else:
             match_fuse_list_regexp = self.fuse_list_regexp.match(line)
@@ -150,11 +156,12 @@ class ChipInfoReader:
                     fuse_values = [int(xstr, 16) for xstr in rhs.split('&')]
                     fuse_number = int(fuse)
 
-                    fuses[lhs] = list(zip(range(fuse_number - 1, (fuse_number + len(fuse_values) - 1)), fuse_values))
+                    fuses[lhs] = list(zip(range(fuse_number - 1, (fuse_number + len(fuse_values) - 1)), fuse_values, strict=True))
 
                 block['fuses'][name] = fuses
             elif self.non_blank_regexp.match(line):
-                raise FormatError(f'Unrecognized line format {line}.')
+                msg = f'Unrecognized line format {line}.'
+                raise FormatError(msg)
 
     def get_chip(self, name: str) -> ChipInfoEntry:
         return self.chip_entries[name.lower()]

@@ -1,5 +1,5 @@
 from types import TracebackType
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Self
 
 from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.protocol.ChipConfig import ChipConfig
@@ -11,15 +11,15 @@ if TYPE_CHECKING:
 
 class IProgrammingInterface:
 
-    def __init__(self, connection: IConnection, chip_info: ChipInfoEntry, icsp_mode: bool = False):
+    def __init__(self, connection: IConnection, chip_info: ChipInfoEntry, *, icsp_mode: bool = False) -> None:
         self.connection = connection
         self.chip_info = chip_info
-        self._init_programming_vars(icsp_mode)
+        self._init_programming_vars(icsp_mode=icsp_mode)
 
-    def _init_programming_vars(self, icsp_mode: bool = False) -> None:
+    def _init_programming_vars(self, *, icsp_mode: bool = False) -> None:
         raise NotImplementedError
 
-    def set_programming_voltages_command(self, on: bool) -> None:
+    def set_programming_voltages_command(self, *, on: bool) -> None:
         raise NotImplementedError
 
     def cycle_programming_voltages(self) -> None:
@@ -78,7 +78,7 @@ class IProgrammingInterface:
     def close(self) -> None:
         raise NotImplementedError
 
-    def __enter__(self) -> 'IProgrammingInterface':
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, exc_type: type[BaseException] | None,

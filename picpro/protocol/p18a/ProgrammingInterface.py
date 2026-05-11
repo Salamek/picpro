@@ -2,6 +2,7 @@ import struct
 
 from picpro.exceptions import InvalidResponseError, InvalidValueError
 from picpro.protocol.ChipConfig import ChipConfig
+from picpro.protocol.enums import HeaderEnum, ResponseEnum
 from picpro.protocol.IFuseTransaction import IFuseTransaction
 from picpro.protocol.IProgrammingInterface import IProgrammingInterface
 
@@ -13,23 +14,23 @@ class FuseTransaction(IFuseTransaction):
 
         command_body = (b'\x00' * 10) + struct.pack('<HHHHHHH', *fuses)  # send all 0 in id, and then the fuse values
         self.programming_interface.connection.command_start()
-        self.programming_interface.set_programming_voltages_command(True)
+        self.programming_interface.set_programming_voltages_command(on=True)
         self.programming_interface.connection.serial_connection.write(cmd.to_bytes(1, 'little'))
         self.programming_interface.connection.serial_connection.write(command_body)
         # It appears the command will return 'B' on chips for which
         # this isn't appropriate?
         response = self.programming_interface.connection.read(1)
-        result = response == b'Y'
-        self.programming_interface.set_programming_voltages_command(False)
+        self.programming_interface.set_programming_voltages_command(on=False)
         self.programming_interface.connection.command_end()
 
-        if not result:
+        response_enum = ResponseEnum(response)
+        if response_enum != ResponseEnum.YES:
             raise InvalidResponseError
 
 
 class ProgrammingInterface(IProgrammingInterface):
 
-    def _init_programming_vars(self, icsp_mode: bool = False) -> None:
+    def _init_programming_vars(self, *, icsp_mode: bool = False) -> None:
         """Inform PIC programmer of general parameters of PIC to be
         programmed.  Necessary for use of various other commands.
         """
@@ -65,19 +66,19 @@ class ProgrammingInterface(IProgrammingInterface):
         )
 
         self.connection.serial_connection.write(command_payload)
-        self.connection.expect(b'I', send_command_end=True)
+        self.connection.expect(ResponseEnum.INITIALIZED, send_command_end=True)
 
-    def set_programming_voltages_command(self, on: bool) -> None:
+    def set_programming_voltages_command(self, *, on: bool) -> None:
         """Turn the PIC programming voltages on or off.  Must be called as part of other commands which read or write PIC data."""
         cmd_on = 4
         cmd_off = 5
 
         if on:
             self.connection.serial_connection.write(cmd_on.to_bytes(1, 'little'))
-            expect = b'V'
+            expect = ResponseEnum.PROGRAMING_VOLTAGE_ENABLED
         else:
             self.connection.serial_connection.write(cmd_off.to_bytes(1, 'little'))
-            expect = b'v'
+            expect = ResponseEnum.PROGRAMING_VOLTAGE_DISABLED
 
         self.connection.expect(expect)
 
@@ -89,7 +90,7 @@ class ProgrammingInterface(IProgrammingInterface):
     def cycle_programming_voltages(self) -> None:
         cmd = 6
         self.connection.command_start(cmd)
-        self.connection.expect(b'V', send_command_end=True)
+        self.connection.expect(ResponseEnum.PROGRAMING_VOLTAGE_ENABLED, send_command_end=True)
 
     def program_rom(self, data: bytes) -> None:
         """Write data to ROM.  data should be a binary string of data, high byte first."""
@@ -98,31 +99,33 @@ class ProgrammingInterface(IProgrammingInterface):
         word_count = len(data) // 2
         rom_size = self.chip_info.rom_size
         if rom_size < word_count:
-            raise InvalidValueError(f'Data too large for PIC ROM {word_count} > {rom_size}.')
+            msg = f'Data too large for PIC ROM {word_count} > {rom_size}.'
+            raise InvalidValueError(msg)
 
         if ((word_count * 2) % 32) != 0:
-            raise InvalidValueError('ROM data must be a multiple of 32 bytes in size.')
+            msg = 'ROM data must be a multiple of 32 bytes in size.'
+            raise InvalidValueError(msg)
 
         self.connection.command_start()
-        self.set_programming_voltages_command(True)
+        self.set_programming_voltages_command(on=True)
 
         self.connection.serial_connection.write(cmd.to_bytes(1, 'little'))
 
         word_count_message = struct.pack('>H', word_count)
         self.connection.serial_connection.write(word_count_message)
-        self.connection.expect(b'Y', timeout=20)
+        self.connection.expect(ResponseEnum.YES, timeout=20)
 
         try:
             for i in range(0, (word_count * 2), 32):
                 to_write = data[i:(i + 32)]
                 self.connection.serial_connection.write(to_write)
-                self.connection.expect(b'Y', timeout=20)
-            self.connection.expect(b'P', timeout=20)
+                self.connection.expect(ResponseEnum.YES, timeout=20)
+            self.connection.expect(ResponseEnum.AT_COMMAND_JUMP_TABLE, timeout=20)
         except InvalidResponseError:
             self.connection.serial_connection.flushInput()  # We don't get current address for now.
             raise
 
-        self.set_programming_voltages_command(False)
+        self.set_programming_voltages_command(on=False)
         self.connection.command_end()
 
     def program_eeprom(self, data: bytes) -> None:
@@ -131,30 +134,32 @@ class ProgrammingInterface(IProgrammingInterface):
 
         byte_count = len(data)
         if self.chip_info.eeprom_size < byte_count:
-            raise InvalidValueError('Data too large for PIC EEPROM.')
+            msg = 'Data too large for PIC EEPROM.'
+            raise InvalidValueError(msg)
 
         if (byte_count % 2) != 0:
-            raise InvalidValueError('EEPROM data must be a multiple of 2 bytes in size.')
+            msg = 'EEPROM data must be a multiple of 2 bytes in size.'
+            raise InvalidValueError(msg)
 
         self.connection.command_start()
-        self.set_programming_voltages_command(True)
+        self.set_programming_voltages_command(on=True)
         self.connection.serial_connection.write(cmd.to_bytes(1, 'little'))
 
         byte_count_message = struct.pack('>H', byte_count)
         self.connection.serial_connection.write(byte_count_message)
 
-        self.connection.expect(b'Y', timeout=20)
+        self.connection.expect(ResponseEnum.YES, timeout=20)
         for i in range(0, byte_count, 2):
             self.connection.serial_connection.write(data[i:(i + 2)])
-            self.connection.expect(b'Y', timeout=20)
+            self.connection.expect(ResponseEnum.YES, timeout=20)
         # We must send an extra two bytes, which will have no effect.
         # Why?  I'm not sure.  See protocol doc, and read it backwards.
         # I'm sending zeros because if we did wind up back at the
         # command jump table, then the zeros will have no effect.
         self.connection.serial_connection.write(b'\x00\x00')
-        self.connection.expect(b'P', timeout=20)
+        self.connection.expect(ResponseEnum.AT_COMMAND_JUMP_TABLE, timeout=20)
 
-        self.set_programming_voltages_command(False)
+        self.set_programming_voltages_command(on=False)
         self.connection.command_end()
 
     def program_id_fuses(self, pic_id: bytes, fuses: list[int]) -> FuseTransaction | None:
@@ -166,30 +171,32 @@ class ProgrammingInterface(IProgrammingInterface):
         core_bits = self.chip_info.core_bits
         if core_bits == 16:
             if len(pic_id) != 8:
-                raise InvalidValueError('Should have 8-byte ID for 16 bit core.')
+                msg = 'Should have 8-byte ID for 16 bit core.'
+                raise InvalidValueError(msg)
             if len(fuses) != 7:
-                raise InvalidValueError('Should have 7 fuses for 16 bit core.')
+                msg = 'Should have 7 fuses for 16 bit core.'
+                raise InvalidValueError(msg)
             command_body = b'00' + pic_id + struct.pack('<HHHHHHH', *fuses)
-            response_ok = b'Y'
         else:
             if len(fuses) != 1:
-                raise InvalidValueError('Should have one fuse for 14 bit core.')
+                msg = 'Should have one fuse for 14 bit core.'
+                raise InvalidValueError(msg)
             if len(pic_id) != 4:
-                raise InvalidValueError('Should have 4-byte ID for 14 bit core.')
+                msg = 'Should have 4-byte ID for 14 bit core.'
+                raise InvalidValueError(msg)
             # Command starts with dual '0' for 14 bit
             command_body = (b'00' + pic_id + b'FFFF' + struct.pack('<H', fuses[0]) + (b'\xff\xff' * 6))
-            response_ok = b'Y'
         self.connection.command_start()
-        self.set_programming_voltages_command(True)
+        self.set_programming_voltages_command(on=True)
         self.connection.serial_connection.write(cmd.to_bytes(1, 'little'))
         self.connection.serial_connection.write(command_body)
 
         response = self.connection.read(timeout=20)
 
-        self.set_programming_voltages_command(False)
+        self.set_programming_voltages_command(on=False)
         self.connection.command_end()
 
-        is_ok = response == response_ok
+        is_ok = ResponseEnum(response) == ResponseEnum.YES
         if not is_ok:
             raise InvalidResponseError
 
@@ -211,7 +218,7 @@ class ProgrammingInterface(IProgrammingInterface):
         cmd = 10
 
         self.connection.command_start()
-        self.set_programming_voltages_command(True)
+        self.set_programming_voltages_command(on=True)
         self.connection.serial_connection.write(cmd.to_bytes(1, 'little'))
 
         # Calibration High (Byte)
@@ -223,10 +230,10 @@ class ProgrammingInterface(IProgrammingInterface):
         self.connection.serial_connection.write(calibration)
 
         response = self.connection.read(timeout=10)  # C= calibration fail, F = Fuse fail, Y = OK
-        self.set_programming_voltages_command(False)
+        self.set_programming_voltages_command(on=False)
         self.connection.command_end()
-        # response_ok = b'Y'
-        if response != b'Y':
+
+        if ResponseEnum(response) != ResponseEnum.YES:
             raise InvalidResponseError
 
     def read_rom(self) -> bytes:
@@ -237,11 +244,11 @@ class ProgrammingInterface(IProgrammingInterface):
         rom_size = self.chip_info.rom_size * 2
 
         self.connection.command_start()
-        self.set_programming_voltages_command(True)
+        self.set_programming_voltages_command(on=True)
         self.connection.serial_connection.write(cmd.to_bytes(1, 'little'))
 
         response = self.connection.read(rom_size, timeout=180)
-        self.set_programming_voltages_command(False)
+        self.set_programming_voltages_command(on=False)
         self.connection.command_end()
         return response
 
@@ -252,10 +259,10 @@ class ProgrammingInterface(IProgrammingInterface):
         eeprom_size = self.chip_info.eeprom_size
 
         self.connection.command_start()
-        self.set_programming_voltages_command(True)
+        self.set_programming_voltages_command(on=True)
         self.connection.serial_connection.write(cmd.to_bytes(1, 'little'))
         response = self.connection.read(eeprom_size)
-        self.set_programming_voltages_command(False)
+        self.set_programming_voltages_command(on=False)
         self.connection.command_end()
         return response
 
@@ -263,13 +270,14 @@ class ProgrammingInterface(IProgrammingInterface):
         """Reads chip ID and programmed ID, fuses, and calibration."""
         cmd = 13
         self.connection.command_start()
-        self.set_programming_voltages_command(True)
+        self.set_programming_voltages_command(on=True)
         self.connection.serial_connection.write(cmd.to_bytes(1, 'little'))
         ack = self.connection.read(1)
-        if ack != b'C':
-            raise InvalidResponseError('No acknowledgement from read_config().')
+        if HeaderEnum(ack) != HeaderEnum.CONFIGURATION:
+            msg = 'No acknowledgement from read_config().'
+            raise InvalidResponseError(msg)
         response = self.connection.read(26)
-        self.set_programming_voltages_command(False)
+        self.set_programming_voltages_command(on=False)
         self.connection.command_end()
 
         return ChipConfig.from_bytes(response)
@@ -279,12 +287,12 @@ class ProgrammingInterface(IProgrammingInterface):
         cmd = 14
 
         self.connection.command_start()
-        self.set_programming_voltages_command(True)
+        self.set_programming_voltages_command(on=True)
         self.connection.serial_connection.write(cmd.to_bytes(1, 'little'))
         response = self.connection.read(1)
-        self.set_programming_voltages_command(False)
+        self.set_programming_voltages_command(on=False)
         self.connection.command_end()
-        if response != b'Y':
+        if ResponseEnum(response) != ResponseEnum.YES:
             raise InvalidResponseError
 
     def rom_is_blank(self, high_byte: bytes) -> bool:
@@ -292,24 +300,24 @@ class ProgrammingInterface(IProgrammingInterface):
         cmd = 15
 
         expected_b_bytes = (self.chip_info.rom_size // 256) - 1
+        if expected_b_bytes <= 0:
+            msg = 'Received wrong number of "B" bytes in rom_is_blank().'
+            raise InvalidResponseError(msg)
+
         self.connection.command_start(cmd)
         self.connection.serial_connection.write(high_byte)
         while True:
             response = self.connection.read(1)
-            if response == b'Y':
-                self.connection.command_end()
-                return True
-            if response == b'N':
-                self.connection.command_end()
-                return False
-            if response == b'C':
-                self.connection.command_end()
-                return False
-            if response == b'B':
-                if expected_b_bytes <= 0:
-                    raise InvalidResponseError('Received wrong number of "B" bytes in rom_is_blank().')
-            else:
-                raise InvalidResponseError(f'Unexpected byte in rom_is_blank(): {response!r}.')
+            self.connection.command_end()
+            response_enum = ResponseEnum(response)
+            if response_enum not in [ResponseEnum.YES, ResponseEnum.NO, ResponseEnum.INCORRECT_BYTES]:
+                msg = f'Unexpected response in rom_is_blank(): {response!r}.'
+                raise InvalidResponseError(msg)
+            if response_enum == ResponseEnum.INCORRECT_BYTES:
+                msg = 'high_byte is incorrect.'
+                raise InvalidResponseError(msg)
+
+            return response_enum == ResponseEnum.YES
 
     def eeprom_is_blank(self) -> bool:
         """Returns True if PIC EEPROM is blank."""
@@ -317,10 +325,12 @@ class ProgrammingInterface(IProgrammingInterface):
         self.connection.command_start(cmd)
         response = self.connection.read(1)
         self.connection.command_end()
-        if response not in [b'Y', b'N']:
-            raise InvalidResponseError(f'Unexpected response in eeprom_is_blank(): {response!r}.')
+        response_enum = ResponseEnum(response)
+        if response_enum not in [ResponseEnum.YES, ResponseEnum.NO]:
+            msg = f'Unexpected response in eeprom_is_blank(): {response!r}.'
+            raise InvalidResponseError(msg)
 
-        return response == b'Y'
+        return response_enum == ResponseEnum.YES
 
     def program_debug_vector(self, address: bytes) -> None:
         """Sets the PIC's debugging vector."""
@@ -332,10 +342,12 @@ class ProgrammingInterface(IProgrammingInterface):
         response = self.connection.read(1)
         self.connection.command_end()
 
-        if response not in [b'Y', b'N']:
-            raise InvalidResponseError(f'Unexpected response in program_debug_vector(): {response!r}.')
+        response_enum = ResponseEnum(response)
+        if response_enum not in [ResponseEnum.YES, ResponseEnum.NO]:
+            msg = f'Unexpected response in program_debug_vector(): {response!r}.'
+            raise InvalidResponseError(msg)
 
-        if response != b'Y':
+        if response_enum != ResponseEnum.YES:
             raise InvalidResponseError
 
     def read_debug_vector(self) -> bytes:

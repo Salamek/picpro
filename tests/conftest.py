@@ -11,7 +11,7 @@ from picpro.FlashData import FlashData
 
 @pytest.fixture(scope='module')
 def chip_data_path() -> Path:
-    this_dir = Path(os.path.dirname(os.path.realpath(__file__)))
+    this_dir = Path(os.path.realpath(__file__)).parent
     return this_dir.joinpath('test_chip_data.cid')
 
 @pytest.fixture(scope='module')
@@ -24,7 +24,7 @@ def chip_info_entry(chip_info_reader: ChipInfoReader) -> ChipInfoEntry:
 
 @pytest.fixture(scope='module')
 def hex_file_path() -> Path:
-    this_dir = Path(os.path.dirname(os.path.realpath(__file__)))
+    this_dir = Path(os.path.realpath(__file__)).parent
     return this_dir.joinpath('test.hex')
 
 @pytest.fixture(scope='module')

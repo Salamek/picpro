@@ -71,7 +71,7 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["ALL"]
-ignore = ["D"]
+ignore = ["D", "N999"]
 
 [tool.ruff.lint.flake8-quotes]
 inline-quotes = "single"  # Migrate do double when Pr's are merged
@@ -88,6 +88,7 @@ max-returns = 10
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101", "PLR2004", "INP001", "E501", "N999"]  # Use of assert detected
+"picpro/bin/picpro.py" = ["T201"] # Print
 
 
 [tool.mypy]
