@@ -5,7 +5,7 @@ pkgrel=1
 arch=('any')
 license=('GPL-2.0')
 url='https://github.com/Salamek/picpro'
-makedepends=('python-setuptools')
+makedepends=(python-build python-installer python-wheel python-setuptools)
 depends=(
     'python'
     'python-docopt'
@@ -22,7 +22,12 @@ prepare() {
   cp -R "${srcdir}/../../README.md" "${srcdir}/${pkgname}"
 }
 
+build() {
+    cd "${srcdir}/${pkgname}"
+    python -m build --wheel --no-isolation
+}
+
 package() {
-  cd "${srcdir}/${pkgname}"
-  python setup.py install --root="$pkgdir/" --optimize=1
+    cd "${srcdir}/${pkgname}"
+    python -m installer --destdir="$pkgdir" dist/*.whl
 }
