@@ -11,5 +11,4 @@ REGEXPS:
 
 VERSION_FILES:
     'picpro/__init__.py': 'python'
-    'setup.py': 'setup.py'
     'archlinux/PKGBUILD': 'PKGBUILD'
