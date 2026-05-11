@@ -54,7 +54,7 @@ version = {attr = "picpro.__version__"}
 
 [tool.setuptools.packages.find]
 where = ["."]
-exclude = ["tests*"]
+include = ["picpro*"]
 
 [tool.setuptools.package-data]
 "picpro" = [
