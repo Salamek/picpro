@@ -1,5 +1,4 @@
 import dataclasses
-from typing import List
 
 
 @dataclasses.dataclass
@@ -16,4 +15,4 @@ class ProgrammingVariables:
     erase_mode: int
     program_retries: int
     over_program: int
-    fuse_blank: List[int]
+    fuse_blank: list[int]

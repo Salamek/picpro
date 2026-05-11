@@ -1,7 +1,7 @@
-import re
 import logging
+import re
 from pathlib import Path
-from typing import List, Dict, Optional
+
 from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.exceptions import FormatError
 
@@ -14,7 +14,7 @@ def handle_int(input_str: str) -> int:
     return int(input_str, 10)
 
 
-def handle_fuse_blank(input_str: str) -> List[int]:
+def handle_fuse_blank(input_str: str) -> list[int]:
     return [int(x, 16) for x in input_str.strip().split(' ')]
 
 
@@ -22,18 +22,18 @@ def handle_lower(input_str: str) -> str:
     return input_str.lower()
 
 
-def handle_bool(input_str: str) -> Optional[bool]:
+def handle_bool(input_str: str) -> bool | None:
     boolean_dict = {
         'y': True,
         '1': True,
         'n': False,
-        '0': False
+        '0': False,
     }
     return boolean_dict.get(input_str)
 
 
 class ChipInfoReader:
-    chip_entries: Dict[str, ChipInfoEntry] = {}
+    chip_entries: dict[str, ChipInfoEntry] = {}
     assignment_regexp = re.compile(r'^(\S+)\s*=\s*(.*)\s*$')
     fuse_value_regexp = re.compile(r'"([^"]*)"\s*=\s*([0-9a-fA-F]+(?:&[0-9a-fA-F]+)*)')
     fuse_list_regexp = re.compile(r'^LIST\d+\s+FUSE(?P<fuse>\d)\s+"(?P<name>[^"]*)"\s*(?P<values>.*)$')
@@ -62,7 +62,7 @@ class ChipInfoReader:
         'ProgramTries': 'program_tries',
         'ROMsize': 'rom_size',
         'ProgramFlag2': 'program_flag_2',
-        'PanelSizing': 'panel_sizing'
+        'PanelSizing': 'panel_sizing',
     }
 
     def __init__(self, file_path: Path):
@@ -82,12 +82,12 @@ class ChipInfoReader:
             'program_delay': handle_int,
             'program_tries': handle_int,
             'rom_size': handle_hex,
-            'include': handle_bool
+            'include': handle_bool,
         }
 
         # Open file and split it into data blocks, so we can process data in blocks
         with file_path.open('r', encoding='UTF-8') as file:
-            block: Optional[dict] = None
+            block: dict | None = None
             lines = file.readlines()
             number_of_lines = len(lines)
             for line_index, line in enumerate(lines):
@@ -98,7 +98,7 @@ class ChipInfoReader:
                         # We have line, add to current block
                         if not block:
                             block = {
-                                'fuses': {}
+                                'fuses': {},
                             }
                         self.parse_line(block, stripped_line, line_number)
                     if block and (not stripped_line or line_number == number_of_lines):
@@ -115,7 +115,7 @@ class ChipInfoReader:
                 except FormatError as e:
                     # Destroy this block
                     block = None
-                    logging.error('Parsing of line %s failed, ignoring whole block...', line_number, exc_info=e)
+                    logging.exception('Parsing of line %s failed, ignoring whole block...', line_number, exc_info=e)
 
     def parse_line(self, block: dict, line: str, line_number: int) -> None:
         match_assignment_regexp = self.assignment_regexp.match(line)
@@ -123,7 +123,7 @@ class ChipInfoReader:
             lhs_raw, rhs = match_assignment_regexp.groups()
             lhs = self.chip_info_key_replacements.get(lhs_raw)
             if lhs is None:
-                raise FormatError('Key replacement is None for {}.'.format(lhs_raw))
+                raise FormatError(f'Key replacement is None for {lhs_raw}.')
             try:
                 found_special_handler = self.special_handlers.get(lhs)
                 if found_special_handler:
@@ -132,7 +132,7 @@ class ChipInfoReader:
                     block[lhs] = rhs
             except NameError as e:
                 # Some extraneous line in the file...  do we care?
-                raise FormatError('Assignment outside of chip definition @{}: {}.'.format(line_number, line)) from e
+                raise FormatError(f'Assignment outside of chip definition @{line_number}: {line}.') from e
 
         else:
             match_fuse_list_regexp = self.fuse_list_regexp.match(line)
@@ -154,7 +154,7 @@ class ChipInfoReader:
 
                 block['fuses'][name] = fuses
             elif self.non_blank_regexp.match(line):
-                raise FormatError('Unrecognized line format {}.'.format(line))
+                raise FormatError(f'Unrecognized line format {line}.')
 
     def get_chip(self, name: str) -> ChipInfoEntry:
         return self.chip_entries[name.lower()]

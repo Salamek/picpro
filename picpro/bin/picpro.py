@@ -44,29 +44,30 @@ Options:
     -v --version                     Display version info
 """
 
-import os.path
-import sys
-import signal
 import json
+import os.path
+import signal
+import sys
+from collections.abc import Callable
 from functools import wraps
-from typing import Optional, Callable, Any, Dict
 from pathlib import Path
+from typing import Any
 
 import yaml
-from intelhex import IntelHex
 from docopt import docopt
+from intelhex import IntelHex
 from yaml import ScalarNode
 
-from picpro.ChipInfoReader import ChipInfoReader
+import picpro as app_root
+from picpro import __version__
 from picpro.ChipInfoEntry import ChipInfoEntry
-from picpro.FlashData import FlashData
+from picpro.ChipInfoReader import ChipInfoReader
 from picpro.exceptions import FuseError, InvalidResponseError
+from picpro.FlashData import FlashData
 from picpro.protocol.ChipConfig import ChipConfig
 from picpro.protocol.IProgrammingInterface import IProgrammingInterface
-from picpro.tools import swab_bytes
 from picpro.protocol.p18a.Connection import Connection
-from picpro import __version__
-import picpro as app_root
+from picpro.tools import swab_bytes
 
 APP_ROOT_FOLDER = os.path.abspath(os.path.dirname(app_root.__file__))
 
@@ -77,7 +78,7 @@ if OPTIONS['--version']:
     sys.exit(0)
 
 
-def command(name: Optional[str] = None) -> Callable:
+def command(name: str | None = None) -> Callable:
     """Decorator that registers the chosen command/function.
 
     If a function is decorated with @command but that function name is not a valid "command" according to the docstring,
@@ -103,11 +104,11 @@ def command(name: Optional[str] = None) -> Callable:
         def wrapped() -> Callable:
             return func()
 
-        command_name = name if name else func.__name__
+        command_name = name or func.__name__
 
         # Register chosen function.
         if command_name not in OPTIONS:
-            raise KeyError('Cannot register {}, not mentioned in docstring/docopt.'.format(command_name))
+            raise KeyError(f'Cannot register {command_name}, not mentioned in docstring/docopt.')
         if OPTIONS[command_name]:
             command.chosen = func  # type: ignore
 
@@ -120,7 +121,7 @@ def _find_chip_data() -> Path:
     path_list = [
         os.path.abspath(os.path.join(APP_ROOT_FOLDER, '..', 'usr', 'share', 'picpro', 'chipdata.cid')),
         os.path.join('/', 'usr', 'share', 'picpro', 'chipdata.cid'),
-        os.path.join(APP_ROOT_FOLDER, 'chipdata.cid')
+        os.path.join(APP_ROOT_FOLDER, 'chipdata.cid'),
     ]
 
     if os.name == 'nt':
@@ -140,7 +141,7 @@ def _find_chip_data() -> Path:
 def _verify_pipeline(
         programming_interface: IProgrammingInterface,
         chip_info_entry: ChipInfoEntry,
-        flash_data: FlashData
+        flash_data: FlashData,
 ) -> bool:
     # Verify programmed data.
     # Behold, my godlike powers of verification:
@@ -169,7 +170,7 @@ def _verify_pipeline(
         if pic_eeprom_data == flash_data.eeprom_data:
             print('EEPROM verified.')
         else:
-            print('{} {} ({})'.format(pic_eeprom_data.hex(), flash_data.eeprom_data.hex(), len(flash_data.eeprom_data)))
+            print(f'{pic_eeprom_data.hex()} {flash_data.eeprom_data.hex()} ({len(flash_data.eeprom_data)})')
             print('EEPROM verification failed.')
             verification_result = False
 
@@ -177,12 +178,12 @@ def _verify_pipeline(
 
 
 def _print_chip_config(chip_config: ChipConfig, chip_info_entry: ChipInfoEntry) -> None:
-    print('Chip ID: {} ({})'.format(chip_config.chip_id, hex(chip_config.chip_id)))
-    print('ID:      {}'.format(chip_config.id.hex()))
-    print('CAL:     {}'.format(chip_config.calibrate))
+    print(f'Chip ID: {chip_config.chip_id} ({hex(chip_config.chip_id)})')
+    print(f'ID:      {chip_config.id.hex()}')
+    print(f'CAL:     {chip_config.calibrate}')
     print('Fuses:')
     for name, value in chip_info_entry.decode_fuse_data(chip_config.fuses).items():
-        print('    {} = {}'.format(name, value))
+        print(f'    {name} = {value}')
 
 
 @command()
@@ -204,7 +205,7 @@ def program() -> None:
                 print('Initializing programming interface...')
                 with connection.get_programming_interface(
                         chip_info_entry,
-                        icsp_mode=OPTIONS['--icsp']
+                        icsp_mode=OPTIONS['--icsp'],
                 ) as programming_interface:
                     chip_config = programming_interface.read_config()
                     print('==== Chip info ====')
@@ -242,7 +243,7 @@ def program() -> None:
         except FuseError:
             print('Invalid fuse setting. Fuse names and valid settings for this chip are as follows:')
             print(chip_info_entry.fuse_doc)
-    except IOError:
+    except OSError:
         print('Unable to locate chipinfo.cid file.')
         print('Please verify that file is present in the same directory as this script, '
               'and that the filename is in lowercase characters, and that you have access to read the file.')
@@ -261,7 +262,7 @@ def verify() -> None:
             print('Initializing programming interface...')
             with connection.get_programming_interface(chip_info_entry, icsp_mode=OPTIONS['--icsp']) as programming_interface:
                 chip_config = programming_interface.read_config()
-                print('Chip config: {}'.format(chip_config))
+                print(f'Chip config: {chip_config}')
                 if chip_info_entry.cal_word:
                     # Some chips have cal data put on last two bytes of ROM dump
                     print('CAL is in ROM data, patching ROM to contain the same CAL data...')
@@ -269,7 +270,7 @@ def verify() -> None:
 
                 _verify_pipeline(programming_interface, chip_info_entry, flash_data)
                 print('Done!')
-    except IOError:
+    except OSError:
         print('Unable to locate chipinfo.cid file.')
         print('Please verify that file is present in the same directory as this script, '
               'and that the filename is in lowercase characters, and that you have access to read the file.')
@@ -290,13 +291,13 @@ def dump() -> None:
                     if not chip_info_entry.has_eeprom:
                         print('This chip has no EEPROM!')
                         return
-                    print('Reading EEPROM into file {}...'.format(output_file))
+                    print(f'Reading EEPROM into file {output_file}...')
                     content = swab_bytes(programming_interface.read_eeprom())
                 elif mem_type == 'rom':
-                    print('Reading ROM into file {}...'.format(output_file))
+                    print(f'Reading ROM into file {output_file}...')
                     content = swab_bytes(programming_interface.read_rom())
                 elif mem_type == 'config':
-                    print('Reading CONFIG into file {}...'.format(output_file))
+                    print(f'Reading CONFIG into file {output_file}...')
                     content = programming_interface.read_config().to_bytes()
                 else:
                     raise ValueError('Unknown memory type.')
@@ -312,7 +313,7 @@ def dump() -> None:
                     with open(output_file, 'w', encoding='ascii') as file:
                         intel_hex.write_hex_file(file)
                 print('Done!')
-    except IOError:
+    except OSError:
         print('Unable to locate chipinfo.cid file.')
         print('Please verify that file is present in the same directory as this script, '
               'and that the filename is in lowercase characters, and that you have access to read the file.')
@@ -330,7 +331,7 @@ def erase() -> None:
                 print('Erasing chip...')
                 programming_interface.erase_chip()
                 print('Done!')
-    except IOError:
+    except OSError:
         print('Unable to locate chipinfo.cid file.')
         print('Please verify that file is present in the same directory as this script, '
               'and that the filename is in lowercase characters, and that you have access to read the file.')
@@ -359,39 +360,39 @@ def hex_info() -> None:
     # Read hex file.
     try:
         intel_hex = IntelHex(str(hex_file_path))
-    except IOError:
-        print('Unable to find hex file "{}".'.format(hex_file_path))
+    except OSError:
+        print(f'Unable to find hex file "{hex_file_path}".')
         print('Please verify that the file exists and that you have access to it.')
-        return None
+        return
 
     # Get chip info
     try:
         chip_info_reader = ChipInfoReader(_find_chip_data())
-    except IOError:
+    except OSError:
         print('Unable to locate chipinfo.cid file.')
         print('Please verify that file is present in the same directory as this script, '
               'and that the filename is in lowercase characters, and that you have access to read the file.')
-        return None
+        return
 
     try:
         chip_info_entry = chip_info_reader.get_chip(pic_type)
     except KeyError:
-        print('Unable to find chip type "{}" in data file.'.format(pic_type))
+        print(f'Unable to find chip type "{pic_type}" in data file.')
         print('Please check that the spelling is correct, and that data file is up-to-date.')
-        return None
+        return
 
     try:
         flash_data = FlashData(chip_info_entry, intel_hex)
     except FuseError:
         print('Invalid fuse setting. Fuse names and valid settings for this chip are as follows:')
         print(chip_info_entry.fuse_doc)
-        return None
+        return
 
 
     word_count_rom = flash_data.rom_buffer.raw_size // 2
     word_count_eeprom = flash_data.eeprom_buffer.raw_size
-    print('ROM {} words used, {} words free on chip.'.format(word_count_rom, chip_info_entry.rom_size - word_count_rom))
-    print('EEPROM {} bytes used, {} bytes free on chip.'.format(word_count_eeprom, chip_info_entry.eeprom_size - word_count_eeprom))
+    print(f'ROM {word_count_rom} words used, {chip_info_entry.rom_size - word_count_rom} words free on chip.')
+    print(f'EEPROM {word_count_eeprom} bytes used, {chip_info_entry.eeprom_size - word_count_eeprom} bytes free on chip.')
 
     indent_char = '  '
     in_list_char = '- '
@@ -404,17 +405,18 @@ def hex_info() -> None:
             entry = intel_hex.start_addr['EIP']
         else:
             raise RuntimeError("Unknown 'IntelHex.start_addr' found.")
-        print("{:s}entry: 0x{:08X}".format(indent_char, entry))
+        print(f'{indent_char:s}entry: 0x{entry:08X}')
     segments = intel_hex.segments()
     if segments:
-        print("{:s}data:".format(indent_char))
+        print(f'{indent_char:s}data:')
         for s in segments:
-            print("{:s}{:s}{{ first: 0x{:08X}, last: 0x{:08X}, length: 0x{:08X} }}".format(indent_char, in_list_char, s[0], s[1] - 1, s[1] - s[0]))
-    print("")
+            print(f'{indent_char:s}{in_list_char:s}{{ first: 0x{s[0]:08X}, last: 0x{s[1] - 1:08X}, length: 0x{s[1] - s[0]:08X} }}')
+    print()
 
-    #intel_hex.dump()
+    print(f'ROM: {flash_data.rom_data.hex()}')
+    print(f'EEPROM: {flash_data.eeprom_data.hex()}')
 
-    return None
+    return
 
 
 @command()
@@ -422,13 +424,13 @@ def programmer_info() -> None:
     port = OPTIONS['--port']
     try:
         with Connection(port) as connection:
-            print('Firmware version: {}'.format(connection.programmer_version()))
+            print(f'Firmware version: {connection.programmer_version()}')
             print('Protocol version: {}'.format(connection.programmer_protocol().decode('UTF-8')))
     except ConnectionError:
-        print('Unable to open serial port "{}".'.format(port))
+        print(f'Unable to open serial port "{port}".')
         print('Be sure port identifier is valid and that you have access to it.')
     except InvalidResponseError as e:
-        print('Unable to initialize connection to programmer. {}'.format(e))
+        print(f'Unable to initialize connection to programmer. {e}')
         print('Please check that device is properly connected and working.')
 
 
@@ -454,13 +456,13 @@ def read_chip_config() -> None:
             print('Initializing programming interface...')
             with connection.get_programming_interface(
                     chip_info_entry,
-                    icsp_mode=OPTIONS['--icsp']
+                    icsp_mode=OPTIONS['--icsp'],
             ) as programming_interface:
                 chip_config = programming_interface.read_config()
                 _print_chip_config(chip_config, chip_info_entry)
 
                 print('Done!')
-    except IOError:
+    except OSError:
         print('Unable to locate chipinfo.cid file.')
         print('Please verify that file is present in the same directory as this script, '
               'and that the filename is in lowercase characters, and that you have access to read the file.')
@@ -472,9 +474,9 @@ def chipdata_migrate() -> None:
     output_dir = Path('./usr/share/picpro/chip-data.d')
 
     def hex_string_representer(dumper: yaml.Dumper, data: Any) -> ScalarNode:
-        if isinstance(data, str) and data.startswith("0x"):
-            return dumper.represent_scalar("tag:yaml.org,2002:int", hex(int(data, 16)))
-        return dumper.represent_scalar("tag:yaml.org,2002:str", data)
+        if isinstance(data, str) and data.startswith('0x'):
+            return dumper.represent_scalar('tag:yaml.org,2002:int', hex(int(data, 16)))
+        return dumper.represent_scalar('tag:yaml.org,2002:str', data)
 
     class HexStringDumper(yaml.Dumper):  # pylint: disable=too-many-ancestors
         pass
@@ -491,7 +493,7 @@ def chipdata_migrate() -> None:
 
     for chip_name, chip_entry in chip_info_reader.chip_entries.items():
         chip_name_lower = chip_name.lower()
-        file_path = output_dir.joinpath('{}.yml'.format(chip_name_lower))
+        file_path = output_dir.joinpath(f'{chip_name_lower}.yml')
         with file_path.open('w', encoding='utf-8') as f:
             data = chip_entry.to_dict()
             data['chip_id'] = hex(chip_entry.chip_id)
@@ -512,7 +514,7 @@ def chipdata_migrate() -> None:
             data['fuses_blank'] = fuse_blank
             del data['fuse_blank']
             del data['fuses']
-            fuses: Dict[str, Dict[str, Dict[int, int]]] = {}
+            fuses: dict[str, dict[str, dict[int, int]]] = {}
 
             for fuse_name, fuse_options in chip_entry.fuses.items():
                 for option_name, options in fuse_options.items():
@@ -529,7 +531,7 @@ def chipdata_migrate() -> None:
 
 def main() -> None:
     signal.signal(signal.SIGINT, lambda _signal, _frame: sys.exit(0))  # Properly handle Control+C
-    getattr(command, 'chosen')()  # Execute the function specified by the user.
+    command.chosen()  # Execute the function specified by the user.
 
 
 if __name__ == '__main__':

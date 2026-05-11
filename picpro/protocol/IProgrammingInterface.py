@@ -1,9 +1,9 @@
 from types import TracebackType
-from typing import Optional, Type, List, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from picpro.ChipInfoEntry import ChipInfoEntry
-from picpro.protocol.IConnection import IConnection
 from picpro.protocol.ChipConfig import ChipConfig
+from picpro.protocol.IConnection import IConnection
 
 if TYPE_CHECKING:
     from picpro.protocol.IFuseTransaction import IFuseTransaction
@@ -33,9 +33,10 @@ class IProgrammingInterface:
         """Write data to EEPROM.  Data size must be small enough to fit in EEPROM."""
         raise NotImplementedError
 
-    def program_id_fuses(self, pic_id: bytes, fuses: List[int]) -> Optional['IFuseTransaction']:
+    def program_id_fuses(self, pic_id: bytes, fuses: list[int]) -> Optional['IFuseTransaction']:
         """Program PIC ID and fuses.  For 16-bit processors, fuse values
-        are not committed until program_18fxxxx_fuse() is called."""
+        are not committed until program_18fxxxx_fuse() is called.
+        """
         raise NotImplementedError
 
     def program_calibration(self, calibrate: int, fuse: int) -> None:
@@ -80,7 +81,7 @@ class IProgrammingInterface:
     def __enter__(self) -> 'IProgrammingInterface':
         return self
 
-    def __exit__(self, exc_type: Optional[Type[BaseException]],
-                 exc_value: Optional[BaseException],
-                 traceback: Optional[TracebackType]) -> None:
+    def __exit__(self, exc_type: type[BaseException] | None,
+                 exc_value: BaseException | None,
+                 traceback: TracebackType | None) -> None:
         self.close()

@@ -1,7 +1,9 @@
 import time
 from types import TracebackType
-from typing import Optional, Type, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING
+
 import serial
+
 from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.exceptions import InvalidResponseError
 
@@ -22,14 +24,14 @@ class IConnection:
                 stopbits=1,
                 timeout=0.1,
                 xonxoff=False,
-                rtscts=False
+                rtscts=False,
             )
         except serial.SerialException as e:
-            raise ConnectionError('Unable to open serial port "{}".'.format(port)) from e
+            raise ConnectionError(f'Unable to open serial port "{port}".') from e
 
         self.reset()
 
-    def read(self, count: int = 1, timeout: Optional[Union[int, float]] = 5) -> bytes:
+    def read(self, count: int = 1, timeout: float | None = 5) -> bytes:
         # _read(count, timeout)
         # Read bytes from the port.  Stop when the requested number of
         # bytes have been received, or the timeout has passed.  In order
@@ -47,15 +49,15 @@ class IConnection:
 
         return result
 
-    def expect(self, expected: bytes, timeout: Optional[Union[int, float]] = 5, send_command_end: bool = False) -> None:
+    def expect(self, expected: bytes, timeout: float | None = 5, send_command_end: bool = False) -> None:
         """Raise an exception if the expected response byte is not sent by the PIC programmer before timeout."""
         response = self.read(len(expected), timeout=timeout)
         if send_command_end:
             self.command_end()
         if response != expected:
-            raise InvalidResponseError('Expected "{!r}", received {!r}.'.format(expected, response))
+            raise InvalidResponseError(f'Expected "{expected!r}", received {response!r}.')
 
-    def command_start(self, cmd: Optional[int] = None) -> None:
+    def command_start(self, cmd: int | None = None) -> None:
         # Send command 1: if we're at the jump table already this will
         # get us out.  If we're awaiting command start, this will
         # still echo 'Q' and await another command start.
@@ -83,13 +85,12 @@ class IConnection:
         result = ack == b'Q'
         if not result:
             if ack != b'':
-                raise InvalidResponseError('Unexpected response ("{!r}") in command end.'.format(ack))
+                raise InvalidResponseError(f'Unexpected response ("{ack!r}") in command end.')
             raise InvalidResponseError('No acknowledgement for command end.')
         return result
 
     def reset(self) -> bool:
         """Resets the PIC Programmer's on-board controller."""
-
         self.serial_connection.dtr = True
         time.sleep(.1)
         self.serial_connection.reset_input_buffer()
@@ -120,7 +121,8 @@ class IConnection:
 
     def echo(self, msg: bytes = b'X') -> bytes:
         """Instructs the PIC programmer to echo back the message
-        string.  Returns the PIC programmer's response."""
+        string.  Returns the PIC programmer's response.
+        """
         cmd = b'\x02'
         self.command_start()
         result = b''
@@ -167,7 +169,7 @@ class IConnection:
     def __enter__(self) -> 'IConnection':
         return self
 
-    def __exit__(self, exc_type: Optional[Type[BaseException]],
-                 exc_value: Optional[BaseException],
-                 traceback: Optional[TracebackType]) -> None:
+    def __exit__(self, exc_type: type[BaseException] | None,
+                 exc_value: BaseException | None,
+                 traceback: TracebackType | None) -> None:
         self.close()

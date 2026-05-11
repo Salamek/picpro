@@ -1,18 +1,18 @@
-import serial
 import threading
-import pytest
-import time
 from unittest.mock import patch
+
+import pytest
+import serial
+
 from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.FlashData import FlashData
 from picpro.protocol.IProgrammingInterface import IProgrammingInterface
-from tests.P018aMockedDevice import P018aMockedDevice
-
 from picpro.protocol.p18a.Connection import Connection
 from picpro.protocol.p18a.ProgrammingInterface import ProgrammingInterface
+from tests.P018aMockedDevice import P018aMockedDevice
 
 
-@pytest.fixture(scope="session")  # type: ignore
+@pytest.fixture(scope='session')
 def mock_serial_device() -> P018aMockedDevice:
     """Fixture to return a mocked serial device."""
     device = P018aMockedDevice()
@@ -22,21 +22,21 @@ def mock_serial_device() -> P018aMockedDevice:
     return device
 
 
-@pytest.fixture(scope="module")  # type: ignore
-@patch("serial.Serial", autospec=True)
+@pytest.fixture(scope='module')
+@patch('serial.Serial', autospec=True)
 def mock_connection(mock_serial: serial.Serial, mock_serial_device: P018aMockedDevice) -> Connection:
     """Test communication with a mocked serial device."""
     mock_serial.return_value = mock_serial_device
 
-    return Connection("/dev/ttyUSB0")
+    return Connection('/dev/ttyUSB0')
 
-@pytest.fixture(scope="module")  # type: ignore
+@pytest.fixture(scope='module')
 def mock_programming_interface(mock_connection: Connection, chip_info_entry: ChipInfoEntry) -> IProgrammingInterface:
     return mock_connection.get_programming_interface(chip_info_entry)
 
 
 def test_echo(mock_connection: Connection) -> None:
-    echo_message = 'Hello world'.encode()
+    echo_message = b'Hello world'
     result = mock_connection.echo(echo_message)
     assert result == echo_message
 

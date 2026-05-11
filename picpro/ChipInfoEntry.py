@@ -1,7 +1,8 @@
 import dataclasses
 import functools
-from picpro.ProgrammingVariables import ProgrammingVariables
+
 from picpro.exceptions import FuseError
+from picpro.ProgrammingVariables import ProgrammingVariables
 from picpro.tools import indexwise_and
 
 
@@ -43,7 +44,7 @@ class ChipInfoEntry:
         'bit12_b': 11,
         'bit14_h': 12,
         'bit16_c': 13,
-        'newf12b': 11 # From microbrn.exe dump, sends 11 for this core
+        'newf12b': 11, # From microbrn.exe dump, sends 11 for this core
     }
 
     _power_sequence_dict = {
@@ -53,7 +54,7 @@ class ChipInfoEntry:
         'Vpp1Vcc': 3,
         'Vpp2Vcc': 4,
         'VccFastVpp1': 1,
-        'VccFastVpp2': 2
+        'VccFastVpp2': 2,
     }
 
     _vcc_vpp_delay_dict = {
@@ -63,7 +64,7 @@ class ChipInfoEntry:
         'Vpp1Vcc': False,
         'Vpp2Vcc': False,
         'VccFastVpp1': True,
-        'VccFastVpp2': True
+        'VccFastVpp2': True,
     }
 
     _socket_image_dict = {
@@ -71,7 +72,7 @@ class ChipInfoEntry:
         '14pin': 'socket pin 13',
         '18pin': 'socket pin 2',
         '28Npin': 'socket pin 1',
-        '40pin': 'socket pin 1'
+        '40pin': 'socket pin 1',
     }
 
     def to_dict(self) -> dict:
@@ -94,13 +95,12 @@ class ChipInfoEntry:
             'band_gap': self.band_gap,
             'icsp_only': self.icsp_only,
             'chip_id': self.chip_id,
-            'fuses': self.fuses
+            'fuses': self.fuses,
         }
 
     @functools.cached_property
     def programming_vars(self) -> ProgrammingVariables:
         """Returns a ProgrammingVars"""
-
         core_type_int = self._core_type_dict.get(self.core_type)
         if not core_type_int:
             raise ValueError('Failed to identify core_type.')
@@ -136,8 +136,8 @@ class ChipInfoEntry:
 
     def decode_fuse_data(self, fuse_values: list) -> dict:
         """Given a list of fuse values, return a dict of symbolic
-        (fuse : value) mapping representing the fuses that are set."""
-
+        (fuse : value) mapping representing the fuses that are set.
+        """
         fuse_param_list = self.fuses
         result = {}
 
@@ -176,11 +176,11 @@ class ChipInfoEntry:
             fuse_value = fuse_dict[fuse]
 
             if fuse not in fuse_param_list:
-                raise FuseError('Unknown fuse "{}".'.format(fuse))
+                raise FuseError(f'Unknown fuse "{fuse}".')
             fuse_settings = fuse_param_list[fuse]
 
             if fuse_value not in fuse_settings:
-                raise FuseError('Invalid fuse setting: "{}" = "{}"'.format(fuse, fuse_value))
+                raise FuseError(f'Invalid fuse setting: "{fuse}" = "{fuse_value}"')
 
             result = indexwise_and(result, fuse_settings[fuse_value])
 
@@ -201,12 +201,12 @@ class ChipInfoEntry:
         for fuse in fuse_param_list:
             fuse_settings = fuse_param_list[fuse]
 
-            result = result + '\'' + fuse + '\' : ('
+            result = result + "'" + fuse + "' : ("
             first = True
             for setting in fuse_settings:
                 if not first:
                     result = result + ', '
-                result = result + '\'' + setting + '\''
+                result = result + "'" + setting + "'"
                 first = False
             result = result + ')\n'
         return result

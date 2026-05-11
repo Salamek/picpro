@@ -1,10 +1,11 @@
-import pytest
 from pathlib import Path
+
+import pytest
 
 from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.ChipInfoReader import ChipInfoReader
-from picpro.ProgrammingVariables import ProgrammingVariables
 from picpro.exceptions import FuseError
+from picpro.ProgrammingVariables import ProgrammingVariables
 
 
 def test_be_constructed_with(chip_data_path: Path) -> None:
@@ -38,19 +39,19 @@ def test_get_chip(chip_info_reader: ChipInfoReader) -> None:
         'fuses': {
             'WDT': {
                 'Enabled': [(0, 16383)],
-                'Disabled': [(0, 16379)]
+                'Disabled': [(0, 16379)],
             },
             'Code Protect': {
                 'Disabled': [(0, 16383)],
-                'Enabled': [(0, 16375)]
+                'Enabled': [(0, 16375)],
             },
             'MCLRE': {
                 'Enabled': [(0, 16383)],
-                'Disabled': [(0, 16367)]
-            }
+                'Disabled': [(0, 16367)],
+            },
         },
         'program_tries': 1,
-        'over_program': 0
+        'over_program': 0,
     }
 
     chip_info = chip_info_reader.get_chip('10F200')
@@ -73,7 +74,7 @@ def test_get_chip_programing_vars(chip_info_reader: ChipInfoReader) -> None:
         erase_mode=3,
         program_retries=1,
         over_program=0,
-        fuse_blank=[16383, 16383]
+        fuse_blank=[16383, 16383],
     )
 
     chip_info = chip_info_reader.get_chip('16f737')
@@ -103,35 +104,35 @@ def test_get_chip_multiple_fuses(chip_info_reader: ChipInfoReader) -> None:
         'fuses': {
             'WDT': {
                 'Enabled': [(0, 16383)],
-                'Disabled': [(0, 16379)]
+                'Disabled': [(0, 16379)],
             },
             'PWRTE': {
                 'Disabled': [(0, 16383)],
-                'Enabled': [(0, 16375)]
+                'Enabled': [(0, 16375)],
             },
             'MCLRE': {
                 'Enabled': [(0, 16383)],
-                'Disabled': [(0, 16351)]
+                'Disabled': [(0, 16351)],
             },
             'BOREN': {
                 'Enabled': [(0, 16383), (1, 16383)],
                 'Sleep OFF': [(0, 16383), (1, 16319)],
                 'SBOREN': [(0, 16319), (1, 16383)],
-                'Disabled': [(0, 16319), (1, 16319)]
+                'Disabled': [(0, 16319), (1, 16319)],
             },
             'Brownout Voltage': {
                 '2.0V': [(0, 16383)],
                 '2.7V': [(0, 16255)],
                 '4.2V': [(0, 16127)],
-                '4.5V': [(0, 15999)]
+                '4.5V': [(0, 15999)],
             },
             'CCP2 Mux': {
                 'RC1': [(0, 16383)],
-                'RB3': [(0, 12287)]
+                'RB3': [(0, 12287)],
             },
             'Code Protect': {
                 'Disabled': [(0, 16383)],
-                'Enabled': [(0, 8191)]
+                'Enabled': [(0, 8191)],
             },
             'Oscillator': {
                 'EXTRC_CLKOUT': [(0, 16383)],
@@ -141,26 +142,26 @@ def test_get_chip_multiple_fuses(chip_info_reader: ChipInfoReader) -> None:
                 'EXTCLK': [(0, 16367)],
                 'HS': [(0, 16366)],
                 'XT': [(0, 16365)],
-                'LP': [(0, 16364)]
+                'LP': [(0, 16364)],
             },
             'Clock Monitor': {
                 'Enabled': [(1, 16383)],
-                'Disabled': [(1, 16382)]
+                'Disabled': [(1, 16382)],
             },
             'Int/Ext Switch': {
                 'Enabled': [(1, 16383)],
-                'Disabled': [(1, 16381)]
-            }
+                'Disabled': [(1, 16381)],
+            },
         },
         'program_tries': 1,
-        'over_program': 0
+        'over_program': 0,
     }
 
     assert chip_info_entry.to_dict() == expect
 
 
 def test_has_eeprom(chip_info_entry: ChipInfoEntry) -> None:
-    assert chip_info_entry.has_eeprom == True
+    assert chip_info_entry.has_eeprom
 
 
 def test_pin1_location_text(chip_info_entry: ChipInfoEntry) -> None:
@@ -189,7 +190,7 @@ def test_decode_fuse_data(chip_info_entry: ChipInfoEntry) -> None:
         'MCLRE': 'Enabled',
         'Oscillator': 'RC CLKGP4 RCGP5',
         'PWRTE': 'Disabled',
-        'WDT': 'Enabled'
+        'WDT': 'Enabled',
     }
     assert chip_info_entry.decode_fuse_data([12799, 16383, 16383, 65535, 65535, 65535, 65535]) == expected
 
@@ -207,7 +208,7 @@ def test_encode_fuse_data(chip_info_entry: ChipInfoEntry) -> None:
         'MCLRE': 'Enabled',
         'Oscillator': 'RC CLKGP4 RCGP5',
         'PWRTE': 'Disabled',
-        'WDT': 'Enabled'
+        'WDT': 'Enabled',
     }
 
     expected = [12799]

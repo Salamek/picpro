@@ -1,0 +1,105 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = 'setuptools.build_meta'
+
+[project]
+name = "picpro"
+license = "LGPL-3.0-or-later"
+dynamic = ["version"]
+requires-python = ">= 3.12"
+description = "picpro a kitsrus PIC CLI programmer."
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+
+dependencies = [
+    "pyserial",
+    "docopt",
+    "intelhex",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff",
+    "mypy",
+    "types-PyYAML",
+]
+test = ["pytest"]
+
+
+[project.readme]
+file = "README.md"
+content-type = "text/markdown"
+
+[[project.authors]]
+name = "Adam Schubert"
+email = "adam.schubert@sg1-game.net"
+
+[project.urls]
+Homepage = "https://github.com/Salamek/picpro"
+
+[tool.setuptools.dynamic]
+version = {attr = "picpro.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+"portal_api" = [
+    "usr/share/picpro/*",
+]
+
+[project.scripts]
+picpro = "picpro.__main__:main"
+
+
+[tool.ruff]
+line-length = 170
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = ["D"]
+
+[tool.ruff.lint.flake8-quotes]
+inline-quotes = "single"  # Migrate do double when Pr's are merged
+
+[tool.ruff.lint.mccabe]
+max-complexity = 20
+
+[tool.ruff.lint.pylint]
+allow-magic-value-types = ["int", "str"]
+max-args = 8
+max-branches = 16
+max-returns = 10
+
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "PLR2004", "INP001", "E501", "N999"]  # Use of assert detected
+
+
+[tool.mypy]
+files = ["picpro", "tests"]
+python_version = 3.11
+strict = true
+# Make it bit lax
+show_error_codes = true
+ignore_missing_imports = true
+allow_any_generics = true
+warn_return_any = false
+warn_unreachable = false
+disallow_subclassing_any = false
+disallow_untyped_decorators = false
+exclude = "(.venv/.*|build/.*)"

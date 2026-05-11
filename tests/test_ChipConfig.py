@@ -1,4 +1,3 @@
-import pytest
 
 from picpro.protocol.ChipConfig import ChipConfig
 
@@ -16,7 +15,7 @@ def test_to_bytes() -> None:
         chip_id=4043,
         id=b'\x00\x00\x07\x0f\xff\xff\xff\xff',
         fuses=[12749, 16383, 16383, 65535, 65535, 65535, 65535],
-        calibrate=16383
+        calibrate=16383,
     )
 
     expect = bytes.fromhex('cb0f0000070fffffffffcd31ff3fff3fffffffffffffffffff3f')

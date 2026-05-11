@@ -1,7 +1,9 @@
 import dataclasses
 import struct
-from typing import Optional, List, Callable
+from collections.abc import Callable
+
 from intelhex import IntelHex
+
 from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.tools import swab_bytes
 
@@ -16,7 +18,7 @@ class MemoryMapping:
     rom: MemoryRegion
     eeprom: MemoryRegion
     config: MemoryRegion
-    id: Optional[MemoryRegion] = None
+    id: MemoryRegion | None = None
 
 
 @dataclasses.dataclass
@@ -30,16 +32,16 @@ class PaddedBuffer:
         self.data = swab_bytes(self.data)
 
 class FlashData:
-    calibration_word: Optional[bytes]
+    calibration_word: bytes | None
     rom_buffer: PaddedBuffer
     eeprom_buffer: PaddedBuffer
     config_buffer: PaddedBuffer
     fuse_buffer: PaddedBuffer
-    id_buffer: Optional[PaddedBuffer]
+    id_buffer: PaddedBuffer | None
 
     _memory_mapping: MemoryMapping
 
-    def __init__(self, chip_info: ChipInfoEntry, hex_file: IntelHex, pic_id: Optional[str] = None, fuses: Optional[dict] = None):
+    def __init__(self, chip_info: ChipInfoEntry, hex_file: IntelHex, pic_id: str | None = None, fuses: dict | None = None):
         self.chip_info = chip_info
         self.hex_file = hex_file
         self.pic_id = pic_id
@@ -62,7 +64,7 @@ class FlashData:
                 rom=MemoryRegion(0x0000, rom_size_bytes),  # Was hardcoded to 0x8000
                 eeprom=MemoryRegion(0xf000, 0xf100),
                 config=MemoryRegion(0x300000, 0x30000e),
-                id=MemoryRegion(0x200000, 0x200010)
+                id=MemoryRegion(0x200000, 0x200010),
             )
         elif self.chip_info.core_bits == 12:
             # 12-bit Baseline family (10F, 12F508, etc.)
@@ -84,7 +86,7 @@ class FlashData:
 
         self.process()
 
-    def _tobinarray_really(self, start: int, end: int, pad_callback: Callable[[int, int], int], max_size: Optional[int] = None) -> PaddedBuffer:
+    def _tobinarray_really(self, start: int, end: int, pad_callback: Callable[[int, int], int], max_size: int | None = None) -> PaddedBuffer:
         """Return binary array."""
         buf = bytearray()
         raw_size = 0
@@ -101,13 +103,13 @@ class FlashData:
 
         result_len = len(buf)
         if result_len % 2 != 0:
-            raise ValueError('Result should have even len! ({} % 2 != 0)'.format(result_len))
+            raise ValueError(f'Result should have even len! ({result_len} % 2 != 0)')
 
         return PaddedBuffer(
             data=bytes(buf),
             raw_size=raw_size,
             padding_size=result_len-raw_size,
-            size=result_len
+            size=result_len,
         )
 
 
@@ -121,40 +123,40 @@ class FlashData:
             start=self._memory_mapping.rom.start,
             end=self._memory_mapping.rom.end,
             max_size=(self.chip_info.rom_size * 2), # Makes _tobinarray_really to rise ValueError if there are data in given range over expected size of chip
-            pad_callback=lambda adr, i: rom_blank_word[i % 2]  # LoL, i % 2 returns 1/0 and rom_blank_word are two bytes with index 0 and 1 ;)
+            pad_callback=lambda adr, i: rom_blank_word[i % 2],  # LoL, i % 2 returns 1/0 and rom_blank_word are two bytes with index 0 and 1 ;)
         )
 
         self.eeprom_buffer = self._tobinarray_really(
             start=self._memory_mapping.eeprom.start,
             end=self._memory_mapping.eeprom.end,
             max_size=self.chip_info.eeprom_size,
-            pad_callback=lambda adr, i: 0x0FF
+            pad_callback=lambda adr, i: 0x0FF,
         )
 
         self.config_buffer = self._tobinarray_really(
             start=self._memory_mapping.config.start,
             end=self._memory_mapping.config.end,
-            pad_callback=lambda adr, i: 0x000
+            pad_callback=lambda adr, i: 0x000,
         )
 
         if self.chip_info.core_bits == 16:
             self.fuse_buffer = self._tobinarray_really(
                 start=0x300000,
                 end=0x30000e,
-                pad_callback=lambda adr, i: self._fuse_data_blank[i]
+                pad_callback=lambda adr, i: self._fuse_data_blank[i],
             )
         else:
             self.fuse_buffer = self._tobinarray_really(
                 start=0x400e,
                 end=0x4010,
-                pad_callback=lambda adr, i: self._fuse_data_blank[i]
+                pad_callback=lambda adr, i: self._fuse_data_blank[i],
             )
 
         if self._memory_mapping.id:
             self.id_buffer = self._tobinarray_really(
                 start=self._memory_mapping.id.start,
                 end=self._memory_mapping.id.end,
-                pad_callback=lambda adr, i: 0x000
+                pad_callback=lambda adr, i: 0x000,
             )
 
     def _is_little_endian(self) -> bool:
@@ -200,7 +202,7 @@ class FlashData:
         if self.fuses:
             self.chip_info.encode_fuse_data(self.fuses)
 
-    def set_calibration_word(self, calibration_word: Optional[bytes] = None) -> None:
+    def set_calibration_word(self, calibration_word: bytes | None = None) -> None:
         if not self.chip_info.cal_word:
             raise ValueError('This chip does not have calibration in ROM data')
 
@@ -225,7 +227,7 @@ class FlashData:
         return id_data if self.chip_info.core_bits == 16 else bytes([id_data[x] for x in range(1, 8, 2)])
 
     @property
-    def fuse_data(self) -> List[int]:
+    def fuse_data(self) -> list[int]:
         fuse_values = [int(struct.unpack('>H', self.fuse_buffer.data[x:x + 2])[0]) for x in range(0, self.fuse_buffer.size, 2)]
         if self.fuses:
             fuse_settings = self.chip_info.decode_fuse_data(fuse_values)

@@ -1,13 +1,12 @@
-import struct
 import dataclasses
-from typing import List
+import struct
 
 
 @dataclasses.dataclass
 class ChipConfig:
     chip_id: int
     id: bytes
-    fuses: List[int]
+    fuses: list[int]
     calibrate: int
 
     @classmethod
@@ -17,7 +16,7 @@ class ChipConfig:
             chip_id=config[0],
             id=b''.join(config[1:9]),
             fuses=list(config[9:16]),
-            calibrate=config[16]
+            calibrate=config[16],
         )
 
     def to_bytes(self) -> bytes:
@@ -39,5 +38,5 @@ class ChipConfig:
             self.fuses[4],
             self.fuses[5],
             self.fuses[6],
-            self.calibrate
+            self.calibrate,
         )

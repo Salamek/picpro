@@ -1,14 +1,14 @@
 import struct
-from typing import List, Optional
-from picpro.protocol.IProgrammingInterface import IProgrammingInterface
-from picpro.protocol.IFuseTransaction import IFuseTransaction
+
 from picpro.exceptions import InvalidResponseError, InvalidValueError
 from picpro.protocol.ChipConfig import ChipConfig
+from picpro.protocol.IFuseTransaction import IFuseTransaction
+from picpro.protocol.IProgrammingInterface import IProgrammingInterface
 
 
 # @TODO Missing commands to implement: 14 and 25.
 class FuseTransaction(IFuseTransaction):
-    def program_18fxxxx_fuse(self, fuses: List[int]) -> None:
+    def program_18fxxxx_fuse(self, fuses: list[int]) -> None:
         """Commits fuse values previously loaded using program_id_fuses()"""
         cmd = 18
 
@@ -32,8 +32,8 @@ class ProgrammingInterface(IProgrammingInterface):
 
     def _init_programming_vars(self, icsp_mode: bool = False) -> None:
         """Inform PIC programmer of general parameters of PIC to be
-         programmed.  Necessary for use of various other commands."""
-
+        programmed.  Necessary for use of various other commands.
+        """
         programing_vars = self.chip_info.programming_vars
 
         if icsp_mode:
@@ -62,7 +62,7 @@ class ProgrammingInterface(IProgrammingInterface):
             programing_vars.power_sequence,
             programing_vars.erase_mode,
             programing_vars.program_retries,
-            programing_vars.over_program
+            programing_vars.over_program,
         )
 
         self.connection.serial_connection.write(command_payload)
@@ -99,7 +99,7 @@ class ProgrammingInterface(IProgrammingInterface):
         word_count = len(data) // 2
         rom_size = self.chip_info.rom_size
         if rom_size < word_count:
-            raise InvalidValueError('Data too large for PIC ROM {} > {}.'.format(word_count, rom_size))
+            raise InvalidValueError(f'Data too large for PIC ROM {word_count} > {rom_size}.')
 
         if ((word_count * 2) % 32) != 0:
             raise InvalidValueError('ROM data must be a multiple of 32 bytes in size.')
@@ -158,9 +158,10 @@ class ProgrammingInterface(IProgrammingInterface):
         self.set_programming_voltages_command(False)
         self.connection.command_end()
 
-    def program_id_fuses(self, pic_id: bytes, fuses: List[int]) -> Optional[FuseTransaction]:
+    def program_id_fuses(self, pic_id: bytes, fuses: list[int]) -> FuseTransaction | None:
         """Program PIC ID and fuses.  For 16-bit processors, fuse values
-        are not committed until program_18fxxxx_fuse() is called."""
+        are not committed until program_18fxxxx_fuse() is called.
+        """
         cmd = 9
 
         core_bits = self.chip_info.core_bits
@@ -200,8 +201,7 @@ class ProgrammingInterface(IProgrammingInterface):
         return None
 
     def program_calibration(self, calibrate: int, fuse: int) -> None:
-        """
-        Program calibration
+        """Program calibration
         Args:
             calibrate:
             fuse:
@@ -310,7 +310,7 @@ class ProgrammingInterface(IProgrammingInterface):
                 if expected_b_bytes <= 0:
                     raise InvalidResponseError('Received wrong number of "B" bytes in rom_is_blank().')
             else:
-                raise InvalidResponseError('Unexpected byte in rom_is_blank(): {!r}.'.format(response))
+                raise InvalidResponseError(f'Unexpected byte in rom_is_blank(): {response!r}.')
 
     def eeprom_is_blank(self) -> bool:
         """Returns True if PIC EEPROM is blank."""
@@ -319,7 +319,7 @@ class ProgrammingInterface(IProgrammingInterface):
         response = self.connection.read(1)
         self.connection.command_end()
         if response not in [b'Y', b'N']:
-            raise InvalidResponseError('Unexpected response in eeprom_is_blank(): {!r}.'.format(response))
+            raise InvalidResponseError(f'Unexpected response in eeprom_is_blank(): {response!r}.')
 
         return response == b'Y'
 
@@ -334,7 +334,7 @@ class ProgrammingInterface(IProgrammingInterface):
         self.connection.command_end()
 
         if response not in [b'Y', b'N']:
-            raise InvalidResponseError('Unexpected response in program_debug_vector(): {!r}.'.format(response))
+            raise InvalidResponseError(f'Unexpected response in program_debug_vector(): {response!r}.')
 
         if response != b'Y':
             raise InvalidResponseError

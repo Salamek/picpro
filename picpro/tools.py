@@ -1,8 +1,8 @@
 
 def indexwise_and(fuses: list, setting_values: list) -> list:
     """Given a list of fuse values, and a list of (index, value) pairs,
-    return a list x such that x[index] = fuses[index] & value."""
-
+    return a list x such that x[index] = fuses[index] & value.
+    """
     result = list(fuses)
     for (index, value) in setting_values:
         result[index] = result[index] & value
