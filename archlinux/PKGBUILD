@@ -11,12 +11,13 @@ depends=(
     'python-docopt'
     'python-pyserial'
     'python-intelhex'
+    'python-yaml'
+    'python-platformdirs'
 )
 
 prepare() {
   mkdir -p "${srcdir}/${pkgname}"
   cp -R "${srcdir}/../../picpro" "${srcdir}/${pkgname}"
-  cp -R "${srcdir}/../../usr" "${srcdir}/${pkgname}"
   cp -R "${srcdir}/../../tests" "${srcdir}/${pkgname}"
   cp -R "${srcdir}/../../pyproject.toml" "${srcdir}/${pkgname}"
   cp -R "${srcdir}/../../README.md" "${srcdir}/${pkgname}"

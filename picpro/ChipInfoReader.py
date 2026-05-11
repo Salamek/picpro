@@ -1,5 +1,6 @@
 import logging
 import re
+from importlib.resources.abc import Traversable
 from pathlib import Path
 
 from picpro.ChipInfoEntry import ChipInfoEntry
@@ -43,7 +44,7 @@ class ChipInfoReader:
     # Class for reading chipinfo files, which provide information about different types of PICs.
 
 
-    def __init__(self, file_path: Path) -> None:
+    def __init__(self, file_path: Path | Traversable) -> None:
         self.chip_entries = {}
         self._special_handlers = {
             'chip_name': handle_lower,

@@ -27,6 +27,7 @@ dependencies = [
     "docopt",
     "intelhex",
     "pyyaml",
+    "platformdirs>=4"
 ]
 
 [project.optional-dependencies]
@@ -58,7 +59,7 @@ include = ["picpro*"]
 
 [tool.setuptools.package-data]
 "picpro" = [
-    "usr/share/picpro/*",
+    "data/*",
 ]
 
 [project.scripts]

@@ -45,17 +45,19 @@ Options:
 """
 
 import json
-import os.path
 import signal
 import sys
 from collections.abc import Callable
 from functools import wraps
+from importlib.resources import files
+from importlib.resources.abc import Traversable
 from pathlib import Path
 from typing import TypeVar
 
 import yaml
 from docopt import docopt
 from intelhex import IntelHex
+from platformdirs import user_data_dir
 from yaml import ScalarNode
 
 import picpro as app_root
@@ -120,26 +122,21 @@ def command(name: str | None = None) -> Callable[[Callable[..., CT]], Callable[.
     return function_wrap
 
 
-def _find_chip_data() -> Path:
-    path_list: list[Path] = [
-        APP_ROOT_FOLDER.joinpath('..', 'usr', 'share', 'picpro', 'chipdata.cid').absolute(),
-        Path('/', 'usr', 'share', 'picpro', 'chipdata.cid'),
-        APP_ROOT_FOLDER.joinpath('chipdata.cid'),
+def _find_chip_data() -> Path | Traversable:
+    path_list: list[Path | Traversable] = [
+        Path(user_data_dir('picpro')) / 'chipdata.cid',
+        Path('/usr/share/picpro/chipdata.cid'),
+        APP_ROOT_FOLDER / 'chipdata.cid',
+        files('picpro.data') / 'chipdata.cid',
     ]
 
-    if os.name == 'nt':
-        local_app_data = os.getenv('LOCALAPPDATA')
-        if local_app_data:
-            # windows path
-            path_list.append(Path(local_app_data) / 'picpro' / 'chipdata.cid')
+    found = next((f for f in path_list if f.is_file()), None)
 
-    chip_data_files = [f for f in path_list if f.is_file()]
-
-    if len(chip_data_files) == 0:
+    if found is None:
         msg = "File 'chipdata.cid' was not found in any search path."
         raise ValueError(msg)
 
-    return Path(chip_data_files[0])
+    return found
 
 
 def _verify_pipeline(
