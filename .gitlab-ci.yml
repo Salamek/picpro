@@ -6,22 +6,27 @@ stages:
 
 test:debian:
   stage: test
+  before_script:
+    - apt update
+    - apt install ca-certificates python3-venv --yes
   script:
-    - apt-get update -qy
-    - apt-get install -y python3-setuptools python3-pytest-runner python3-pytest python3-pylint-common python3-pytest-cov python3-serial python3-docopt tox
-    - tox -e py311
+    - python3 -m venv .venv
+    - ./.venv/bin/pip install .[dev,test]
+    - ./.venv/bin/ruff check .
+    - ./.venv/bin/mypy .
+    - ./.venv/bin/pytest .
   tags:
     - debian
 
 test:archlinux:
   stage: test
   script:
-    #- pacman -Sy python-pytest python-pylint python-pytest-cov python-pyserial python-docopt python-tox --noconfirm
-    #- tox -e py312
     - pacman -Sy python-virtualenv --noconfirm
-    - python -m venv venv
-    - ./venv/bin/pip install tox
-    - ./venv/bin/tox -e py313
+    - python -m venv .venv
+    - ./.venv/bin/pip install .[dev,test]
+    - ./.venv/bin/ruff check .
+    - ./.venv/bin/mypy .
+    - ./.venv/bin/pytest .
   tags:
     - archlinux
 
@@ -82,24 +87,22 @@ packagetest:archlinux:
 
 repoupdate:
   stage: deploy
-  variables:
-    TWINE_USERNAME: Salamek
   before_script:
     - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
     - apt-get update -y
-    - apt-get install twine python3-setuptools -y
+    - apt-get install twine python3-setuptools python3-wheel python3-build -y
     - eval $(ssh-agent -s)
     - ssh-add <(echo "$SSH_PRIVATE_KEY")
     - mkdir -p ~/.ssh
     - '[[ -f /.dockerenv ]] && echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config'
   script:
-    - ssh www-data@repository 'rm -rf /var/www/repository.salamek.cz/www/arch/pub/any/picpro*.pkg.tar.zst'
-    - ssh www-data@repository 'rm -rf /var/www/repository.salamek.cz/cache/deb/pub/all/picpro*.deb'
-    - scp archlinux/picpro*.pkg.tar.zst www-data@repository:/var/www/repository.salamek.cz/www/arch/pub/any
-    - scp deb_dist/*.deb www-data@repository:/var/www/repository.salamek.cz/cache/deb/pub/all
-    - ssh www-data@repository '/var/www/repository.salamek.cz/deb-pub-update.sh'
-    - ssh www-data@repository '/var/www/repository.salamek.cz/arch-pub-update.sh'
-    - python3 setup.py sdist
+    - ssh www-data@192.168.1.27 'rm -rf /var/www/repository.salamek.cz/www/arch/pub/any/picpro*.pkg.tar.zst'
+    - ssh www-data@192.168.1.27 'rm -rf /var/www/repository.salamek.cz/cache/deb/pub/all/picpro*.deb'
+    - scp archlinux/picpro*.pkg.tar.zst www-data@192.168.1.27:/var/www/repository.salamek.cz/www/arch/pub/any
+    - scp deb_dist/*.deb www-data@192.168.1.27:/var/www/repository.salamek.cz/cache/deb/pub/all
+    - ssh www-data@192.168.1.27 '/var/www/repository.salamek.cz/deb-pub-update.sh'
+    - ssh www-data@192.168.1.27 '/var/www/repository.salamek.cz/arch-pub-update.sh'
+    - python3 -m build
     - twine upload dist/*
   dependencies:
     - package:archlinux
