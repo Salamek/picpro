@@ -57,7 +57,7 @@ where = ["."]
 exclude = ["tests*"]
 
 [tool.setuptools.package-data]
-"portal_api" = [
+"picpro" = [
     "usr/share/picpro/*",
 ]
 
