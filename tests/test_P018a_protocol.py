@@ -34,6 +34,10 @@ def mock_connection(mock_serial: serial.Serial, mock_serial_device: P018aMockedD
 def mock_programming_interface(mock_connection: Connection, chip_info_entry: ChipInfoEntry) -> IProgrammingInterface:
     return mock_connection.get_programming_interface(chip_info_entry)
 
+
+def test_programming_interface_icsp(mock_connection: Connection, chip_info_entry: ChipInfoEntry) -> None:
+    mock_connection.get_programming_interface(chip_info_entry, icsp_mode=True).close()
+
 def test_failed_connection() -> None:
     with pytest.raises(ConnectionError):
         Connection('/dev/ttyNever')

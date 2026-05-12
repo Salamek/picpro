@@ -66,7 +66,7 @@ def test_unknown_core_type() -> None:
     _base_valid_data['core_type'] = 'bullshit'
     chip_info = ChipInfoEntry.from_dict(_base_valid_data)
     with pytest.raises(ValueError, match=r'Failed to identify core_type.'):
-        _a = chip_info.programming_vars
+        _a = chip_info.programming_variables
 
 def test_unknown_core_bits() -> None:
     _base_valid_data['core_type'] = 'bullshit'

@@ -1,12 +1,11 @@
-import os
 from pathlib import Path
 
 import pytest
 
 from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.ChipInfoReader import ChipInfoReader
-from picpro.exceptions import FormatError, FuseError
-from picpro.ProgrammingVariables import ProgrammingVariables
+from picpro.exceptions import FuseError
+from picpro.ProgrammingVariables import ProgrammingVariables, ProgrammingVariablesFlags
 
 
 def test_be_constructed_with(chip_data_path: Path) -> None:
@@ -61,26 +60,28 @@ def test_get_chip(chip_info_reader: ChipInfoReader) -> None:
 
 
 def test_get_chip_programing_vars(chip_info_reader: ChipInfoReader) -> None:
-
-    expect = ProgrammingVariables(
-        rom_size=4096,
-        eeprom_size=0,
-        core_type=7,
+    flags = ProgrammingVariablesFlags(
         flag_calibration_value_in_rom=False,
         flag_band_gap_fuse=False,
         flag_vcc_vpp_delay=True,
         flag_18f_single_panel_access_mode=False,
+    )
+
+    expect = ProgrammingVariables(
+        rom_size_words=4096,
+        eeprom_size=0,
+        core_type=7,
+        flags=flags,
         program_delay=10,
         power_sequence=1,
         erase_mode=3,
         program_retries=1,
         over_program=0,
-        fuse_blank=[16383, 16383],
     )
 
     chip_info = chip_info_reader.get_chip('16f737')
 
-    assert chip_info.programming_vars == expect
+    assert chip_info.programming_variables == expect
 
 
 def test_get_chip_multiple_fuses(chip_info_reader: ChipInfoReader) -> None:

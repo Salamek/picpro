@@ -3,7 +3,7 @@ import functools
 from typing import ClassVar, Self, TypeVar
 
 from picpro.exceptions import FuseError
-from picpro.ProgrammingVariables import ProgrammingVariables
+from picpro.ProgrammingVariables import ProgrammingVariables, ProgrammingVariablesFlags
 from picpro.tools import indexwise_and
 
 _T = TypeVar('_T')
@@ -132,28 +132,30 @@ class ChipInfoEntry:
         )
 
     @functools.cached_property
-    def programming_vars(self) -> ProgrammingVariables:
-        """Returns a ProgrammingVars"""
+    def programming_variables(self) -> ProgrammingVariables:
+        """Returns a ProgrammingVariables"""
         core_type_int = self._core_type_dict.get(self.core_type)
         if not core_type_int:
             msg = 'Failed to identify core_type.'
             raise ValueError(msg)
 
-        return ProgrammingVariables(
-            rom_size=self.rom_size,
-            eeprom_size=self.eeprom_size,
-            core_type=core_type_int,
+        programing_vars_flags = ProgrammingVariablesFlags(
             flag_calibration_value_in_rom=self.cal_word,
             flag_band_gap_fuse=self.band_gap,
-            # T.Nixon says this is the rule for this flag.
             flag_18f_single_panel_access_mode=self.core_type == 'bit16_a',
             flag_vcc_vpp_delay=self._vcc_vpp_delay_dict[self.power_sequence],
+        )
+
+        return ProgrammingVariables(
+            rom_size_words=self.rom_size,
+            eeprom_size=self.eeprom_size,
+            core_type=core_type_int,
+            flags=programing_vars_flags,
             program_delay=self.program_delay,
             power_sequence=self._power_sequence_dict[self.power_sequence],
             erase_mode=self.erase_mode,
             program_retries=self.program_tries,
             over_program=self.over_program,
-            fuse_blank=self.fuse_blank,
         )
 
     @functools.cached_property

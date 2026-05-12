@@ -34,7 +34,7 @@ class ProgrammingInterface(IProgrammingInterface):
         """Inform PIC programmer of general parameters of PIC to be
         programmed.  Necessary for use of various other commands.
         """
-        programing_vars = self.chip_info.programming_vars
+        programing_vars = self.chip_info.programming_variables
 
         if icsp_mode:
             if programing_vars.power_sequence == 2:
@@ -44,28 +44,7 @@ class ProgrammingInterface(IProgrammingInterface):
 
         cmd = 3
         self.connection.command_start(cmd)
-
-        flags = (
-                (programing_vars.flag_calibration_value_in_rom and 1) |
-                (programing_vars.flag_band_gap_fuse and 2) |
-                (programing_vars.flag_18f_single_panel_access_mode and 4) |
-                (programing_vars.flag_vcc_vpp_delay and 8)
-        )
-
-        command_payload = struct.pack(
-            '>HHBBBBBBB',
-            programing_vars.rom_size,
-            programing_vars.eeprom_size,
-            programing_vars.core_type,
-            flags,
-            programing_vars.program_delay,
-            programing_vars.power_sequence,
-            programing_vars.erase_mode,
-            programing_vars.program_retries,
-            programing_vars.over_program,
-        )
-
-        self.connection.serial_connection.write(command_payload)
+        self.connection.serial_connection.write(programing_vars.to_bytes())
         self.connection.expect(ResponseEnum.INITIALIZED, send_command_end=True)
 
     def set_programming_voltages_command(self, *, on: bool) -> None:
