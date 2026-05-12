@@ -36,7 +36,7 @@ dev = [
     "mypy",
     "types-PyYAML",
 ]
-test = ["pytest"]
+test = ["pytest", "pytest-cov"]
 
 
 [project.readme]
@@ -88,9 +88,12 @@ max-returns = 10
 
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101", "PLR2004", "INP001", "E501", "N999"]  # Use of assert detected
+"tests/*" = ["S101", "PLR2004", "INP001", "E501", "N999", "PLR0915", "C901"]  # Use of assert detected
 "picpro/bin/picpro.py" = ["T201"] # Print
 
+
+[tool.pytest.ini_options]
+addopts = "--cov=picpro --cov-report=html --cov-report=term-missing"
 
 [tool.mypy]
 files = ["picpro", "tests"]

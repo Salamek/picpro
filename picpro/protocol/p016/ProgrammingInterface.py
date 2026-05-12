@@ -332,7 +332,7 @@ class ProgrammingInterface(IProgrammingInterface):
 
         return response_enum == ResponseEnum.YES
 
-    def program_debug_vector(self, address: bytes) -> None:
+    def program_debug_vector(self, address: int) -> None:
         """Sets the PIC's debugging vector."""
         cmd = 23
 
@@ -350,7 +350,7 @@ class ProgrammingInterface(IProgrammingInterface):
         if response_enum != ResponseEnum.YES:
             raise InvalidResponseError
 
-    def read_debug_vector(self) -> bytes:
+    def read_debug_vector(self) -> int:
         """Returns the value of the PIC's debugging vector."""
         cmd = 24
 

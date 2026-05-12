@@ -2,6 +2,8 @@ import dataclasses
 import struct
 import time
 
+from picpro.protocol.ChipConfig import ChipConfig
+
 
 @dataclasses.dataclass
 class ProgramingVarsFlags:  # @TODO use this in code too
@@ -110,11 +112,17 @@ class P018aMockedDeviceThread:
     in_jump_table: bool
     is_programming_voltages_on: bool
     programing_vars: ProgramingVars | None
+    chip_config: ChipConfig | None
+
     def __init__(self, device: 'P018aMockedDevice') -> None:
         self.device = device
         self.is_programming_voltages_on = False
         self.in_jump_table = False
         self.programing_vars = None
+        self.chip_config = None
+        self.rom_data: bytes | None = None
+        self.eeprom_data: bytes | None = None
+        self.debug_vector: int = 0
 
     def read(self, count: int = 1, timeout: float | None = 5) -> bytes:
         # Read bytes from the port.  Stop when the requested number of
@@ -161,6 +169,7 @@ class P018aMockedDeviceThread:
             self.write(b'Y')
 
         if len(received_rom_data) == send_rom_size:
+            self.rom_data = received_rom_data
             self.write(b'P')
         else:
             self.write(b'N')
@@ -195,20 +204,101 @@ class P018aMockedDeviceThread:
         self.read(2)
 
         if len(received_eeprom_data) == send_eeprom_size:
+            self.eeprom_data = received_eeprom_data
             self.write(b'P')
         else:
             self.write(b'N')
 
     def _program_id_fuzes(self) -> None:
-        # program_eeprom
         if not self.programing_vars or not self.is_programming_voltages_on:
-            # programing_vars and is_programming_voltages_on has to be set for successful program
             self.write(b'N')
             return
 
-        _fuse_settings = self.read(24) # @TODO decode this and do checks
-        # @TODO implement FuseTransaction
+        fuse_settings = self.read(24)
+
+        if fuse_settings[:2] != b'00':
+            self.write(b'N')
+            return
+
+        is_16bit = self.programing_vars.core_type in (1, 2, 13)
+        if is_16bit:
+            pic_id = fuse_settings[2:10]
+            fuses = list(struct.unpack('<HHHHHHH', fuse_settings[10:24]))
+        else:
+            if fuse_settings[6:10] != b'FFFF' or fuse_settings[12:24] != b'\xff\xff' * 6:
+                self.write(b'N')
+                return
+            pic_id = fuse_settings[2:6] + b'\x00' * 4
+            fuses = [struct.unpack('<H', fuse_settings[10:12])[0]] + [0] * 6
+
+        self.chip_config = ChipConfig(chip_id=0, id=pic_id, fuses=fuses, calibrate=0)
         self.write(b'Y')
+
+    def _read_config(self) -> None:
+        if not self.programing_vars or not self.is_programming_voltages_on or self.chip_config is None:
+            self.write(b'N')
+            return
+        self.write(b'C')
+        self.write(self.chip_config.to_bytes())
+
+    def _program_calibration(self) -> None:
+        if not self.programing_vars or not self.is_programming_voltages_on:
+            self.write(b'N')
+            return
+        data = self.read(4)
+        calibrate = struct.unpack('>H', data[0:2])[0]
+        if self.chip_config is None:
+            self.chip_config = ChipConfig(chip_id=0, id=b'\x00' * 8, fuses=[0] * 7, calibrate=calibrate)
+        else:
+            self.chip_config.calibrate = calibrate
+        self.write(b'Y')
+
+    def _read_rom(self) -> None:
+        if not self.programing_vars:
+            return
+        rom_bytes = self.programing_vars.rom_size_words * 2
+        self.write(self.rom_data if self.rom_data is not None else b'\xff' * rom_bytes)
+
+    def _read_eeprom(self) -> None:
+        if not self.programing_vars:
+            return
+        self.write(self.eeprom_data if self.eeprom_data is not None else b'\xff' * self.programing_vars.eeprom_size)
+
+    def _erase_chip(self) -> None:
+        if not self.programing_vars or not self.is_programming_voltages_on:
+            self.write(b'N')
+            return
+        self.rom_data = None
+        self.eeprom_data = None
+        self.chip_config = None
+        self.write(b'Y')
+
+    def _rom_is_blank(self) -> None:
+        self.read(1)  # consume high_byte
+        self.write(b'Y' if self.rom_data is None else b'N')
+
+    def _eeprom_is_blank(self) -> None:
+        self.write(b'Y' if self.eeprom_data is None else b'N')
+
+    def _program_18fxxxx_fuse(self) -> None:
+        if not self.programing_vars or not self.is_programming_voltages_on:
+            self.write(b'N')
+            return
+        data = self.read(24)
+        fuses = list(struct.unpack('<HHHHHHH', data[10:24]))
+        if self.chip_config is None:
+            self.chip_config = ChipConfig(chip_id=0, id=b'\x00' * 8, fuses=fuses, calibrate=0)
+        else:
+            self.chip_config.fuses = fuses
+        self.write(b'Y')
+
+    def _program_debug_vector(self) -> None:
+        address_bytes = self.read(3)
+        self.debug_vector = struct.unpack('>I', b'\x00' + address_bytes)[0]
+        self.write(b'Y')
+
+    def _read_debug_vector(self) -> None:
+        self.write(struct.pack('>I', self.debug_vector))
 
     def listen_for_commands(self) -> None:  # noqa: PLR0912
         while self.device.is_open:
@@ -245,15 +335,37 @@ class P018aMockedDeviceThread:
                     self._program_eeprom()
                 elif data == b'\x09':
                     self._program_id_fuzes()
+                elif data == b'\x0a':
+                    self._program_calibration()
+                elif data == b'\x0b':
+                    self._read_rom()
+                elif data == b'\x0c':
+                    self._read_eeprom()
+                elif data == b'\x0d':
+                    self._read_config()
+                elif data == b'\x0e':
+                    self._erase_chip()
+                elif data == b'\x0f':
+                    self._rom_is_blank()
+                elif data == b'\x10':
+                    self._eeprom_is_blank()
+                elif data == b'\x11':
+                    self._program_18fxxxx_fuse()
                 elif data in [b'\x12', b'\x13']:
                     # wait_until_chip_in_socket/ wait_until_chip_out_of_socket
-                    self.write(b'AY')
+                    self.write(b'A')
+                    time.sleep(1)  # Simulte user manual action taking time
+                    self.write(b'Y')
                 elif data == b'\x14':
                     # programmer_version
                     self.write(b'\x03')
                 elif data == b'\x15':
                     # get protocol
                     self.write(b'P18A')
+                elif data == b'\x16':
+                    self._program_debug_vector()
+                elif data == b'\x17':
+                    self._read_debug_vector()
                 else:
                     self.write(b'F')
             # Outside of jump table, command start waiting

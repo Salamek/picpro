@@ -1,10 +1,11 @@
+import os
 from pathlib import Path
 
 import pytest
 
 from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.ChipInfoReader import ChipInfoReader
-from picpro.exceptions import FuseError
+from picpro.exceptions import FormatError, FuseError
 from picpro.ProgrammingVariables import ProgrammingVariables
 
 

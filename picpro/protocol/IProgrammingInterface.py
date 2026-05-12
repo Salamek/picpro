@@ -67,11 +67,11 @@ class IProgrammingInterface:
         """Returns True if PIC EEPROM is blank."""
         raise NotImplementedError
 
-    def program_debug_vector(self, address: bytes) -> None:
+    def program_debug_vector(self, address: int) -> None:
         """Sets the PIC's debugging vector."""
         raise NotImplementedError
 
-    def read_debug_vector(self) -> bytes:
+    def read_debug_vector(self) -> int:
         """Returns the value of the PIC's debugging vector."""
         raise NotImplementedError
 

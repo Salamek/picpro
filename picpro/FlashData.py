@@ -51,7 +51,6 @@ class FlashData:
         self.calibration_word = None
         self.id_buffer = None
 
-        self._rom_blank_word = self._calculate_rom_blank_word()
         self._fuse_data_blank = b''.join(struct.pack('>H', word) for word in self.chip_info.fuse_blank)
 
         # Set memory map based on PIC architecture family
@@ -114,13 +113,8 @@ class FlashData:
             size=result_len,
         )
 
-
-    def _calculate_rom_blank_word(self) -> int:
-        blank_word = 0xffff << self.chip_info.core_bits
-        return ~blank_word & 0xffff
-
     def _filter_records(self) -> None:
-        rom_blank_word = struct.pack('<H', self._rom_blank_word)
+        rom_blank_word = struct.pack('<H', self.chip_info.rom_blank_word)
         self.rom_buffer = self._tobinarray_really(
             start=self._memory_mapping.rom.start,
             end=self._memory_mapping.rom.end,
@@ -169,8 +163,8 @@ class FlashData:
             if (x + 2) < self.rom_buffer.size:
                 be_word, = struct.unpack('>H', self.rom_buffer.data[x:x + 2])
                 le_word, = struct.unpack('<H', self.rom_buffer.data[x:x + 2])
-                be_ok = (be_word & self._rom_blank_word) == be_word
-                le_ok = (le_word & self._rom_blank_word) == le_word
+                be_ok = (be_word & self.chip_info.rom_blank_word) == be_word
+                le_ok = (le_word & self.chip_info.rom_blank_word) == le_word
                 if be_ok and not le_ok:
                     return False
                 if le_ok and not be_ok:

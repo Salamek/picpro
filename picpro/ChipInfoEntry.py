@@ -1,11 +1,12 @@
 import dataclasses
 import functools
-from typing import ClassVar
+from typing import ClassVar, Self, TypeVar
 
 from picpro.exceptions import FuseError
 from picpro.ProgrammingVariables import ProgrammingVariables
 from picpro.tools import indexwise_and
 
+_T = TypeVar('_T')
 
 @dataclasses.dataclass
 class ChipInfoEntry:
@@ -99,6 +100,37 @@ class ChipInfoEntry:
             'fuses': self.fuses,
         }
 
+    @classmethod
+    def from_dict(cls, data: dict) -> Self:
+        def require(key: str, expected_type: type[_T]) -> _T:
+            value = data.get(key)
+            if not isinstance(value, expected_type):
+                msg = f'{key} was not provided' if value is None else f'{key} has wrong type, expected {expected_type.__name__}'
+                raise TypeError(msg)
+            return value
+
+        return cls(
+            chip_name=require('chip_name', str),
+            include=require('include', bool),
+            socket_image=require('socket_image', str),
+            erase_mode=require('erase_mode', int),
+            flash_chip=require('flash_chip', bool),
+            power_sequence=require('power_sequence', str),
+            program_delay=require('program_delay', int),
+            program_tries=require('program_tries', int),
+            over_program=require('over_program', int),
+            core_type=require('core_type', str),
+            rom_size=require('rom_size', int),
+            eeprom_size=require('eeprom_size', int),
+            fuse_blank=require('fuse_blank', list),
+            cp_warn=require('cp_warn', bool),
+            cal_word=require('cal_word', bool),
+            band_gap=require('band_gap', bool),
+            icsp_only=require('icsp_only', bool),
+            chip_id=require('chip_id', int),
+            fuses=require('fuses', dict),
+        )
+
     @functools.cached_property
     def programming_vars(self) -> ProgrammingVariables:
         """Returns a ProgrammingVars"""
@@ -123,6 +155,11 @@ class ChipInfoEntry:
             over_program=self.over_program,
             fuse_blank=self.fuse_blank,
         )
+
+    @functools.cached_property
+    def rom_blank_word(self) -> int:
+        blank_word = 0xffff << self.core_bits
+        return ~blank_word & 0xffff
 
     @functools.cached_property
     def core_bits(self) -> int:
