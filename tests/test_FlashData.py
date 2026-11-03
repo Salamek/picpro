@@ -19,6 +19,20 @@ def test_eeprom_data(flash_data: FlashData) -> None:
     assert flash_data.eeprom_data == expected
 
 
+def test_eeprom_little_endian_words_are_unpacked(chip_info_entry: ChipInfoEntry, hex_file: IntelHex) -> None:
+    intel_hex = IntelHex(hex_file.todict())
+    intel_hex[0x4200] = 0x11
+    intel_hex[0x4201] = 0x00
+    intel_hex[0x4202] = 0x22
+    intel_hex[0x4203] = 0x00
+
+    flash_data = FlashData(chip_info_entry, intel_hex)
+
+    assert flash_data.eeprom_data[:2] == bytes((0x11, 0x22))
+    assert flash_data.eeprom_data[2:] == b'\xff' * (len(flash_data.eeprom_data) - 2)
+    assert flash_data.eeprom_buffer.raw_size == 2
+
+
 def test_id_data(flash_data: FlashData) -> None:
     expected = bytes.fromhex('0000070f')
     assert flash_data.id_data == expected

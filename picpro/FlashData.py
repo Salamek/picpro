@@ -58,10 +58,11 @@ class FlashData:
         rom_size_bytes = self.chip_info.rom_size * 2
 
         if self.chip_info.core_bits == 16:
-            # 16-bit Baseline family
+            # 16-bit PIC18 family. EEPROM is packed bytes at 0xF00000.
+            eeprom_end = 0xF00000 + self.chip_info.eeprom_size
             self._memory_mapping = MemoryMapping(
                 rom=MemoryRegion(0x0000, rom_size_bytes),  # Was hardcoded to 0x8000
-                eeprom=MemoryRegion(0xf000, 0xf100),
+                eeprom=MemoryRegion(0xF00000, eeprom_end),
                 config=MemoryRegion(0x300000, 0x30000e),
                 id=MemoryRegion(0x200000, 0x200010),
             )
@@ -69,18 +70,22 @@ class FlashData:
             # 12-bit Baseline family (10F, 12F508, etc.)
             # Config/calibration typically beyond ROM, around 2*last_word_addr
             # We scan a conservative range that covers all baseline PICs
+            # EEPROM is one data byte per 16-bit word at 0x4200.
+            eeprom_end = 0x4200 + (self.chip_info.eeprom_size * 2)
             self._memory_mapping = MemoryMapping(
                 rom=MemoryRegion(0x0000, rom_size_bytes),
                 config=MemoryRegion(rom_size_bytes, 0x2000),  # Scan after ROM up to 0x2000
-                eeprom=MemoryRegion(0x2100 * 2, 0x2100 * 2 + max(self.chip_info.eeprom_size, 256)),  # 0x4200+
+                eeprom=MemoryRegion(0x4200, eeprom_end),
             )
         else:  # core_bits == 14
             # 14-bit Midrange family (12F6xx, 16Fxxx)
             # Standard locations: Config at 0x2007 (byte 0x400E), User ID at 0x2000-0x2003, EEPROM at 0x2100+
+            # EEPROM is one data byte per 16-bit word at 0x4200.
+            eeprom_end = 0x4200 + (self.chip_info.eeprom_size * 2)
             self._memory_mapping = MemoryMapping(
                 rom=MemoryRegion(0x0000, rom_size_bytes),  # Was hardcoded to 0x4000
                 config=MemoryRegion(0x4000, 0x4010),  # Includes User ID (0x4000-0x4007) and Config (0x400E)
-                eeprom=MemoryRegion(0x4200, 0x4200 + max(self.chip_info.eeprom_size, 256)),  # Was hardcoded to 0xffff
+                eeprom=MemoryRegion(0x4200, eeprom_end),
             )
 
         self.process()
@@ -125,7 +130,6 @@ class FlashData:
         self.eeprom_buffer = self._tobinarray_really(
             start=self._memory_mapping.eeprom.start,
             end=self._memory_mapping.eeprom.end,
-            max_size=self.chip_info.eeprom_size,
             pad_callback=lambda _adr, _i: 0x0FF,
         )
 
@@ -174,6 +178,30 @@ class FlashData:
                     raise ValueError(msg)
         return False
 
+    def _unpack_eeprom_words(self, *, little_endian: bool) -> None:
+        """Collapse midrange EEPROM words to one data byte each.
+
+        INHX32 stores 12/14-bit EEPROM as one payload byte per 16-bit word.
+        Little-endian files keep that byte first; big-endian files keep it second.
+        """
+        pick = 0 if little_endian else 1
+        words = self.eeprom_buffer.data
+        data = bytearray()
+        raw_size = 0
+        start = self._memory_mapping.eeprom.start
+        for index in range(pick, len(words), 2):
+            data.append(words[index])
+            if self.hex_file._buf.get(start + index) is not None:  # noqa: SLF001
+                raw_size += 1
+
+        unpacked = bytes(data)
+        self.eeprom_buffer = PaddedBuffer(
+            data=unpacked,
+            raw_size=raw_size,
+            padding_size=len(unpacked) - raw_size,
+            size=len(unpacked),
+        )
+
     def process(self) -> None:
         self._filter_records()
         is_swap_bytes = self._is_little_endian()
@@ -181,10 +209,12 @@ class FlashData:
         if is_swap_bytes:
             self.rom_buffer.swab_bytes()
             self.config_buffer.swab_bytes()
-            self.eeprom_buffer.swab_bytes()
             self.fuse_buffer.swab_bytes()
             if self.id_buffer:
                 self.id_buffer.swab_bytes()
+
+        if self.chip_info.core_bits != 16:
+            self._unpack_eeprom_words(little_endian=is_swap_bytes)
 
         # check Fuses
         if self.fuses:
