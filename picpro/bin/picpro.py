@@ -290,7 +290,7 @@ def dump() -> None:
                         print('This chip has no EEPROM!')
                         return
                     print(f'Reading EEPROM into file {output_file}...')
-                    content = swab_bytes(programming_interface.read_eeprom())
+                    content = programming_interface.read_eeprom()
                 elif mem_type == 'rom':
                     print(f'Reading ROM into file {output_file}...')
                     content = swab_bytes(programming_interface.read_rom())
