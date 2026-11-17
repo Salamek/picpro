@@ -50,32 +50,23 @@ import signal
 import sys
 from collections.abc import Callable
 from functools import wraps
-from importlib.resources import files
 from importlib.resources.abc import Traversable
 from pathlib import Path
 from typing import TypeVar
 
-import yaml
 from docopt import docopt
 from intelhex import IntelHex
-from platformdirs import user_data_dir
-from yaml import ScalarNode
 
 import picpro as app_root
 from picpro.ChipDataReader import ChipDataReader
 from picpro.ChipInfoEntry import ChipInfoEntry
-from picpro.ChipInfoReader import ChipInfoReader
 from picpro.exceptions import FuseError, InvalidResponseError
-from picpro.FlashData import FlashData
+from picpro.PicPro import ChipConfigEvent, MemoryType, NoEEPROMError, PicPro, PicProEvent, Stage, StageEvent, Target, VerificationEvent
 from picpro.protocol.ChipConfig import ChipConfig
-from picpro.protocol.IProgrammingInterface import IProgrammingInterface
 from picpro.protocol.p18a.Connection import Connection
 from picpro.tools import swab_bytes
 
-APP_ROOT_FOLDER = Path(app_root.__file__).parent
-
 OPTIONS = docopt(__doc__)
-
 CT = TypeVar('CT')
 
 if OPTIONS['--version']:
@@ -125,71 +116,9 @@ def command(name: str | None = None) -> Callable[[Callable[..., CT]], Callable[.
     return function_wrap
 
 
+
 def _find_chip_data() -> Path | Traversable:
-    path_list: list[Path | Traversable] = [
-        Path(user_data_dir('picpro')) / 'chip-data.d',
-        Path('/usr/share/picpro/chip-data.d'),
-        APP_ROOT_FOLDER / 'chip-data.d',
-        files('picpro') / 'data' / 'chip-data.d',
-    ]
-    found = next((directory for directory in path_list if directory.is_dir()), None)
-    if found is None:
-        msg = "YAML chip data directory 'chip-data.d' was not found in any search path."
-        raise FileNotFoundError(msg)
-    return found
-
-
-def _find_legacy_chip_data() -> Path | Traversable:
-    path_list: list[Path | Traversable] = [
-        Path(user_data_dir('picpro')) / 'chipdata.cid',
-        Path('/usr/share/picpro/chipdata.cid'),
-        APP_ROOT_FOLDER / 'chipdata.cid',
-        files('picpro') / 'data' / 'chipdata.cid',
-    ]
-
-    found = next((f for f in path_list if f.is_file()), None)
-
-    if found is None:
-        msg = "File 'chipdata.cid' was not found in any search path."
-        raise ValueError(msg)
-
-    return found
-
-
-def _verify_pipeline(
-        programming_interface: IProgrammingInterface,
-        chip_info_entry: ChipInfoEntry,
-        flash_data: FlashData,
-) -> bool:
-    # Verify programmed data.
-    # Behold, my godlike powers of verification:
-    print('Verifying ROM.')
-    pic_rom_data = programming_interface.read_rom()
-    verification_result = True
-
-    if pic_rom_data == flash_data.rom_data:
-        print('ROM verified.')
-    else:
-        no_of_zeros = pic_rom_data.count(b'\x00')
-        pic_rom_data_len = len(pic_rom_data)
-        is_maybe_locked = pic_rom_data_len - 2 == no_of_zeros if chip_info_entry.cal_word else pic_rom_data_len == no_of_zeros
-
-        print('ROM verification failed.')
-        if is_maybe_locked:
-            print('Maybe ROM is locked for reading?')
-        verification_result = False
-
-    if chip_info_entry.has_eeprom:
-        print('Verifying EEPROM.')
-        pic_eeprom_data = programming_interface.read_eeprom()
-        if pic_eeprom_data == flash_data.eeprom_data:
-            print('EEPROM verified.')
-        else:
-            print(f'{pic_eeprom_data.hex()} {flash_data.eeprom_data.hex()} ({len(flash_data.eeprom_data)})')
-            print('EEPROM verification failed.')
-            verification_result = False
-
-    return verification_result
+    return PicPro.find_chip_data()
 
 
 def _print_chip_config(chip_config: ChipConfig, chip_info_entry: ChipInfoEntry) -> None:
@@ -201,165 +130,135 @@ def _print_chip_config(chip_config: ChipConfig, chip_info_entry: ChipInfoEntry) 
         print(f'    {name} = {value}')
 
 
+
+def _display_event(event: PicProEvent, operation: str) -> None:
+    if operation == 'programmer_info':
+        return
+    if isinstance(event, ChipConfigEvent):
+        if operation == 'verify':
+            print(f'Chip config: {event.config}')
+        else:
+            if operation == 'program':
+                print('==== Chip info ====')
+            _print_chip_config(event.config, event.chip)
+    elif isinstance(event, VerificationEvent):
+        label = event.memory.value.upper()
+        if event.matches:
+            print(f'{label} verified.')
+        else:
+            if event.memory == MemoryType.EEPROM:
+                print(f'{event.actual.hex()} {event.expected.hex()} ({len(event.expected)})')
+            print(f'{label} verification failed.')
+            if event.maybe_locked:
+                print('Maybe ROM is locked for reading?')
+    elif isinstance(event, StageEvent):
+        if operation == 'dump' and event.stage in (Stage.READING_ROM, Stage.READING_EEPROM, Stage.READING_CONFIG):
+            memory = {Stage.READING_ROM: 'ROM', Stage.READING_EEPROM: 'EEPROM', Stage.READING_CONFIG: 'CONFIG'}[event.stage]
+            print(f"Reading {memory} into file {OPTIONS['--hex_file']}...")
+        elif event.stage == Stage.COMPLETED and operation == 'dump':
+            return  # File output completes after the service has released the device.
+        else:
+            messages = {
+                Stage.CONNECTING: 'Opening connection to programmer...',
+                Stage.INITIALIZING: 'Initializing programming interface...',
+                Stage.PRESERVING_CALIBRATION: 'CAL is in ROM data, patching ROM to contain the same CAL data...',
+                Stage.ERASING: 'Erasing chip...' if operation == 'erase' else 'Erasing chip.',
+                Stage.ERASED: 'Done!',
+                Stage.ERASE_SKIPPED: 'This chip is not erasable.',
+                Stage.PROGRAMMING_ROM: 'Programming ROM.',
+                Stage.PROGRAMMING_EEPROM: 'Programming EEPROM.',
+                Stage.PROGRAMMING_FUSES: 'Programming ID and fuses.',
+                Stage.VERIFYING_ROM: 'Verifying ROM.',
+                Stage.VERIFYING_EEPROM: 'Verifying EEPROM.',
+                Stage.COMMITTING_FUSES: 'Committing 18Fxxxx fuse data.',
+                Stage.COMPLETED: 'Done!',
+            }
+            message = messages.get(event.stage)
+            if message:
+                print(message)
+
+
+def _service(operation: str) -> PicPro:
+    return PicPro(
+        chip_data=ChipDataReader(_find_chip_data()) if operation != 'programmer_info' else None,
+        connection_factory=Connection,
+        on_event=lambda event: _display_event(event, operation),
+    )
+
+
+def _target() -> Target:
+    return Target(OPTIONS['--port'], OPTIONS['--pic_type'], OPTIONS['--icsp'])
+
+
+def _file_error() -> None:
+    print('Unable to read input/output files or YAML chip definitions in chip-data.d.')
+    print('Please verify the paths and file permissions.')
+
+
 @command()
 def program() -> None:
-    fuses = {}
-    for fuse_cmd in OPTIONS['--fuse']:
-        fuse_name, fuse_value = fuse_cmd.split(':')
-        fuses[fuse_name] = fuse_value
-
-    hex_file = Path(OPTIONS['--hex_file'])
+    fuses = dict(fuse.split(':') for fuse in OPTIONS['--fuse'])
     try:
-        intel_hex = IntelHex(str(hex_file))
-        chip_info_reader = ChipDataReader(_find_chip_data())
-        chip_info_entry = chip_info_reader.get_chip(OPTIONS['--pic_type'])
+        service = _service('program')
         try:
-            flash_data = FlashData(chip_info_entry, intel_hex, fuses=fuses, pic_id=OPTIONS['--id'])
-            print('Opening connection to programmer...')
-            with Connection(OPTIONS['--port']) as connection:
-                print('Initializing programming interface...')
-                with connection.get_programming_interface(
-                        chip_info_entry,
-                        icsp_mode=OPTIONS['--icsp'],
-                ) as programming_interface:
-                    chip_config = programming_interface.read_config()
-                    print('==== Chip info ====')
-                    _print_chip_config(chip_config, chip_info_entry)
-                    if chip_info_entry.cal_word:
-                        # Some chips have cal data put on last two bytes of ROM dump
-                        print('CAL is in ROM data, patching ROM to contain the same CAL data...')
-                        flash_data.set_calibration_word(chip_config.calibrate.to_bytes(2, 'big'))
-
-                    # Write ROM, EEPROM, ID and fuses
-                    if chip_info_entry.flash_chip:
-                        print('Erasing chip.')
-                        programming_interface.erase_chip()
-                        print('Done!')
-                    else:
-                        print('This chip is not erasable.')
-
-                    programming_interface.cycle_programming_voltages()
-
-                    print('Programming ROM.')
-                    programming_interface.program_rom(flash_data.rom_data)
-
-                    if chip_info_entry.has_eeprom:
-                        print('Programming EEPROM.')
-                        programming_interface.program_eeprom(flash_data.eeprom_data)
-
-                    print('Programming ID and fuses.')
-                    fuse_transaction = programming_interface.program_id_fuses(flash_data.id_data, flash_data.fuse_data)
-
-                    if not _verify_pipeline(programming_interface, chip_info_entry, flash_data):
-                        sys.exit(1)
-                    if fuse_transaction:
-                        print('Committing 18Fxxxx fuse data.')
-                        fuse_transaction.program_18fxxxx_fuse(flash_data.fuse_data)
-                    print('Done!')
+            result = service.program(_target(), Path(OPTIONS['--hex_file']), pic_id=OPTIONS['--id'], fuses=fuses)
         except FuseError:
             print('Invalid fuse setting. Fuse names and valid settings for this chip are as follows:')
-            print(chip_info_entry.fuse_doc)
+            print(service.get_chip(OPTIONS['--pic_type']).fuse_doc)
+            return
+        if not result.success:
+            sys.exit(1)
     except OSError:
-        print('Unable to read input/output files or YAML chip definitions in chip-data.d.')
-        print('Please verify the paths and file permissions.')
+        _file_error()
 
 
 @command()
 def verify() -> None:
-    hex_file = Path(OPTIONS['--hex_file'])
     try:
-        intel_hex = IntelHex(str(hex_file))
-        chip_info_reader = ChipDataReader(_find_chip_data())
-        chip_info_entry = chip_info_reader.get_chip(OPTIONS['--pic_type'])
-        flash_data = FlashData(chip_info_entry, intel_hex)
-        print('Opening connection to programmer...')
-        with Connection(OPTIONS['--port']) as connection:
-            print('Initializing programming interface...')
-            with connection.get_programming_interface(chip_info_entry, icsp_mode=OPTIONS['--icsp']) as programming_interface:
-                chip_config = programming_interface.read_config()
-                print(f'Chip config: {chip_config}')
-                if chip_info_entry.cal_word:
-                    # Some chips have cal data put on last two bytes of ROM dump
-                    print('CAL is in ROM data, patching ROM to contain the same CAL data...')
-                    flash_data.set_calibration_word(chip_config.calibrate.to_bytes(2, 'big'))
-
-                if not _verify_pipeline(programming_interface, chip_info_entry, flash_data):
-                    sys.exit(1)
-                print('Done!')
+        result = _service('verify').verify(_target(), Path(OPTIONS['--hex_file']))
+        if not result.success:
+            sys.exit(1)
     except OSError:
-        print('Unable to read input/output files or YAML chip definitions in chip-data.d.')
-        print('Please verify the paths and file permissions.')
+        _file_error()
 
 
 @command()
 def dump() -> None:
-    mem_type = OPTIONS['<mem_type>']
     output_file = Path(OPTIONS['--hex_file'])
     try:
-        chip_info_reader = ChipDataReader(_find_chip_data())
-        chip_info_entry = chip_info_reader.get_chip(OPTIONS['--pic_type'])
-        print('Opening connection to programmer...')
-        with Connection(OPTIONS['--port']) as connection:
-            print('Initializing programming interface...')
-            with connection.get_programming_interface(chip_info_entry, icsp_mode=OPTIONS['--icsp']) as programming_interface:
-                if mem_type == 'eeprom':
-                    if not chip_info_entry.has_eeprom:
-                        print('This chip has no EEPROM!')
-                        return
-                    print(f'Reading EEPROM into file {output_file}...')
-                    content = programming_interface.read_eeprom()
-                elif mem_type == 'rom':
-                    print(f'Reading ROM into file {output_file}...')
-                    content = swab_bytes(programming_interface.read_rom())
-                elif mem_type == 'config':
-                    print(f'Reading CONFIG into file {output_file}...')
-                    content = programming_interface.read_config().to_bytes()
-                else:
-                    msg = 'Unknown memory type.'
-                    raise ValueError(msg)
-
-                if OPTIONS['--binary']:
-                    # Binary dump requested
-                    with output_file.open('wb') as binary_file:
-                        binary_file.write(content)
-                else:
-                    intel_hex = IntelHex()
-                    intel_hex.frombytes(content)
-
-                    with output_file.open('w', encoding='ascii') as file:
-                        intel_hex.write_hex_file(file)
-                print('Done!')
+        memory = MemoryType(OPTIONS['<mem_type>'])
+        try:
+            content = _service('dump').read_memory(_target(), memory)
+        except NoEEPROMError:
+            print('This chip has no EEPROM!')
+            return
+        if memory == MemoryType.ROM:
+            content = swab_bytes(content)
+        if OPTIONS['--binary']:
+            output_file.write_bytes(content)
+        else:
+            image = IntelHex()
+            image.frombytes(content)
+            with output_file.open('w', encoding='ascii') as file:
+                image.write_hex_file(file)
+        print('Done!')
     except OSError:
-        print('Unable to read input/output files or YAML chip definitions in chip-data.d.')
-        print('Please verify the paths and file permissions.')
+        _file_error()
 
 
 @command()
 def erase() -> None:
     try:
-        chip_info_reader = ChipDataReader(_find_chip_data())
-        chip_info_entry = chip_info_reader.get_chip(OPTIONS['--pic_type'])
-        print('Opening connection to programmer...')
-        with Connection(OPTIONS['--port']) as connection:
-            print('Initializing programming interface...')
-            with connection.get_programming_interface(chip_info_entry, icsp_mode=OPTIONS['--icsp']) as programming_interface:
-                print('Erasing chip...')
-                programming_interface.erase_chip()
-                print('Done!')
+        _service('erase').erase(_target())
     except OSError:
-        print('Unable to read input/output files or YAML chip definitions in chip-data.d.')
-        print('Please verify the paths and file permissions.')
+        _file_error()
 
 
 @command()
 def chip_info() -> None:
-    pic_type = OPTIONS['<PIC_TYPE>']
-    # Get chip info
-    chip_info_filename = _find_chip_data()
-    chip_info_reader = ChipDataReader(chip_info_filename)
-
-    data = chip_info_reader.get_chip(pic_type).to_dict() if pic_type else {chip_name: entry.to_dict() for chip_name, entry in chip_info_reader.chip_entries.items()}
-
+    service = _service('chip_info')
+    name = OPTIONS['<PIC_TYPE>']
+    data = service.get_chip(name).to_dict() if name else {name: chip.to_dict() for name, chip in service.list_chips().items()}
     print(json.dumps(data))
 
 
@@ -367,38 +266,26 @@ def chip_info() -> None:
 def hex_info() -> None:
     pic_type = OPTIONS['<PIC_TYPE>']
     hex_file_path = Path(OPTIONS['<HEX_FILE>'])
-
-    # Read hex file.
     try:
-        intel_hex = IntelHex(str(hex_file_path))
+        service = _service('hex_info')
+        flash_data = service.inspect_hex(pic_type, hex_file_path)
     except OSError:
-        print(f'Unable to find hex file "{hex_file_path}".')
-        print('Please verify that the file exists and that you have access to it.')
+        if not hex_file_path.is_file():
+            print(f'Unable to find hex file "{hex_file_path}".')
+            print('Please verify that the file exists and that you have access to it.')
+        else:
+            _file_error()
         return
-
-    # Get chip info
-    try:
-        chip_info_reader = ChipDataReader(_find_chip_data())
-    except OSError:
-        print('Unable to read input/output files or YAML chip definitions in chip-data.d.')
-        print('Please verify the paths and file permissions.')
-        return
-
-    try:
-        chip_info_entry = chip_info_reader.get_chip(pic_type)
     except KeyError:
         print(f'Unable to find chip type "{pic_type}" in data file.')
         print('Please check that the spelling is correct, and that data file is up-to-date.')
         return
-
-    try:
-        flash_data = FlashData(chip_info_entry, intel_hex)
     except FuseError:
         print('Invalid fuse setting. Fuse names and valid settings for this chip are as follows:')
-        print(chip_info_entry.fuse_doc)
+        print(service.get_chip(pic_type).fuse_doc)
         return
-
-
+    chip_info_entry = flash_data.chip_info
+    intel_hex = flash_data.hex_file
     print(f'ROM {flash_data.rom_buffer.raw_size} bytes used, {chip_info_entry.rom_size - flash_data.rom_buffer.raw_size} bytes free on chip.')
     print(f'EEPROM {flash_data.eeprom_buffer.raw_size} bytes used, {chip_info_entry.eeprom_size - flash_data.eeprom_buffer.raw_size} bytes free on chip.')
 
@@ -432,103 +319,36 @@ def hex_info() -> None:
 def programmer_info() -> None:
     port = OPTIONS['--port']
     try:
-        with Connection(port) as connection:
-            print(f'Firmware version: {connection.programmer_version()}')
-            print('Protocol version: {}'.format(connection.programmer_protocol().decode('UTF-8')))
+        info = _service('programmer_info').programmer_info(port)
+        print(f'Firmware version: {info.firmware_version}')
+        print(f'Protocol version: {info.protocol}')
     except ConnectionError:
         print(f'Unable to open serial port "{port}".')
         print('Be sure port identifier is valid and that you have access to it.')
-    except InvalidResponseError as e:
-        print(f'Unable to initialize connection to programmer. {e}')
+    except InvalidResponseError as error:
+        print(f'Unable to initialize connection to programmer. {error}')
         print('Please check that device is properly connected and working.')
 
 
 @command()
 def decode_fuses() -> None:
-    pic_type = OPTIONS['--pic_type']
-    fuses = [int(f) for f in OPTIONS['<fuses>'].split()]
-    # Get chip info
-    chip_info_filename = _find_chip_data()
-    chip_info_reader = ChipDataReader(chip_info_filename)
-
-    chip_info_entry = chip_info_reader.get_chip(pic_type)
-    print(chip_info_entry.decode_fuse_data(fuses))
+    print(_service('decode_fuses').decode_fuses(OPTIONS['--pic_type'], [int(value) for value in OPTIONS['<fuses>'].split()]))
 
 
 @command()
 def read_chip_config() -> None:
     try:
-        chip_info_reader = ChipDataReader(_find_chip_data())
-        chip_info_entry = chip_info_reader.get_chip(OPTIONS['--pic_type'])
-        print('Opening connection to programmer...')
-        with Connection(OPTIONS['--port']) as connection:
-            print('Initializing programming interface...')
-            with connection.get_programming_interface(
-                    chip_info_entry,
-                    icsp_mode=OPTIONS['--icsp'],
-            ) as programming_interface:
-                chip_config = programming_interface.read_config()
-                _print_chip_config(chip_config, chip_info_entry)
-
-                print('Done!')
+        _service('read_chip_config').read_config(_target())
     except OSError:
-        print('Unable to read input/output files or YAML chip definitions in chip-data.d.')
-        print('Please verify the paths and file permissions.')
+        _file_error()
 
 
 @command()
 def chipdata_migrate() -> None:
-    source = Path(OPTIONS['<CID_FILE>']) if OPTIONS['<CID_FILE>'] else _find_legacy_chip_data()
-    chip_info_reader = ChipInfoReader(source)
-    output_dir = Path(OPTIONS['--output']) if OPTIONS['--output'] else Path(user_data_dir('picpro')) / 'chip-data.d'
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    def hex_string_representer(dumper: yaml.Dumper, data: str) -> ScalarNode:
-        if isinstance(data, str) and data.startswith('0x'):
-            return dumper.represent_scalar('tag:yaml.org,2002:int', hex(int(data, 16)))
-        return dumper.represent_scalar('tag:yaml.org,2002:str', data)
-
-    class HexStringDumper(yaml.Dumper):  # pylint: disable=too-many-ancestors
-        pass
-
-    HexStringDumper.add_representer(str, hex_string_representer)
-
-    socket_image_to_dip = {
-        '8pin': 'dip8',
-        '14pin': 'dip14',
-        '18pin': 'dip18',
-        '28Npin': 'dip28',
-        '40pin': 'dip40',
-    }
-
-    for chip_name, chip_entry in chip_info_reader.chip_entries.items():
-        chip_name_lower = chip_name.lower()
-        file_path = output_dir.joinpath(f'{chip_name_lower}.yml')
-        with file_path.open('w', encoding='utf-8') as f:
-            data = chip_entry.to_dict()
-            data['chip_id'] = hex(chip_entry.chip_id)
-            data['core_type'] = chip_entry.core_type.lower()
-            data['chip_name'] = chip_name_lower
-            data['socket_image'] = socket_image_to_dip[chip_entry.socket_image] if not chip_entry.icsp_only and chip_entry.socket_image else None
-
-            fuse_blank = {}
-            for index, fuse in enumerate(chip_entry.fuse_blank):
-                fuse_blank[index] = hex(fuse)
-
-            data['fuses_blank'] = fuse_blank
-            del data['fuse_blank']
-            del data['fuses']
-            fuses: dict[str, dict[str, dict[int, int]]] = {}
-
-            for fuse_name, fuse_options in chip_entry.fuses.items():
-                for option_name, options in fuse_options.items():
-                    fuses.setdefault(fuse_name, {})
-                    option_values = dict(options)
-                    fuses[fuse_name].setdefault(option_name, option_values)
-
-            data['fuses'] = fuses
-
-            yaml.dump(data, f, Dumper=HexStringDumper, sort_keys=False)
+    PicPro.migrate_chip_data(
+        Path(OPTIONS['<CID_FILE>']) if OPTIONS['<CID_FILE>'] else None,
+        Path(OPTIONS['--output']) if OPTIONS['--output'] else None,
+    )
 
 
 def main() -> None:

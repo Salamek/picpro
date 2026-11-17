@@ -58,6 +58,49 @@ and then install by running
 pacman -Sy picpro
 ```
 
+## Application API
+
+`PicPro` provides synchronous workflows without importing the CLI, printing,
+installing signal handlers, or selecting process exit codes:
+
+```python
+from pathlib import Path
+
+from picpro.PicPro import PicPro, StageEvent, Target
+
+
+def handle_event(event):
+    if isinstance(event, StageEvent):
+        print(event.stage.value)  # Replace with CLI formatting or a GUI signal.
+
+
+service = PicPro(on_event=handle_event)
+target = Target(port="/dev/ttyUSB0", chip_name="12f675", icsp=True)
+result = service.program(target, Path("firmware.hex"))
+if not result.success:
+    # The caller decides how to present verification failure.
+    pass
+```
+
+The service also exposes `verify`, `erase`, `read_memory`, `read_config`,
+`programmer_info`, `list_chips`, `get_chip`, `inspect_hex`, `decode_fuses`, and
+`migrate_chip_data`. Memory reads return device bytes; output file formats belong
+to the interface. Verification returns a `VerificationResult` with ROM and
+optional EEPROM outcomes. Operational failures propagate as exceptions.
+
+Callbacks receive `StageEvent`, `ChipConfigEvent`, or `VerificationEvent` on the
+calling thread. Configuration events contain snapshots; verification events
+include expected and actual bytes. A GUI should call workflows in a worker and
+marshal events onto its UI thread. Inject `chip_data` and `connection_factory`
+when using custom definitions or testing without hardware.
+
+Pass `should_cancel=cancel_event.is_set` to device workflows for cooperative
+cancellation, which raises `OperationCancelledError`. Cancellation is checked
+between complete commands, including before PIC18 fuse commits. Current events
+report workflow stages; they do not report transfer byte counts or interrupt an
+active transfer or erase command. Connections are released when workflows,
+event handlers, or cancellation raise exceptions.
+
 ## Chip definitions
 
 Normal commands use one YAML file per chip in `chip-data.d`. The first existing
