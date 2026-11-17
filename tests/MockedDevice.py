@@ -5,13 +5,13 @@ from picpro.ProgrammingVariables import ProgrammingVariables
 from picpro.protocol.ChipConfig import ChipConfig
 
 
-class P018aMockedDeviceThread:
+class MockedDeviceThread:
     in_jump_table: bool
     is_programming_voltages_on: bool
     programing_vars: ProgrammingVariables | None
     chip_config: ChipConfig | None
 
-    def __init__(self, device: 'P018aMockedDevice') -> None:
+    def __init__(self, device: 'MockedDevice') -> None:
         self.device = device
         self.is_programming_voltages_on = False
         self.in_jump_table = False
@@ -122,7 +122,7 @@ class P018aMockedDeviceThread:
 
         calibration = self.chip_config.calibrate if self.chip_config else 0xffff
         self.chip_config = ChipConfig(chip_id=0, id=pic_id, fuses=fuses, calibrate=calibration)
-        self.write(b'Y')
+        self.write(b'\x00' if self.device.protocol == b'P014' and not is_16bit else b'Y')
 
     def _read_config(self) -> None:
         if not self.programing_vars or not self.is_programming_voltages_on:
@@ -218,6 +218,15 @@ class P018aMockedDeviceThread:
             if not data:
                 continue
             self.current_command = data[0] if self.in_jump_table else None
+            if self.in_jump_table and self.device.protocol != b'P18A':
+                # P014/P016/P018 retain READ CALIBRATION at 14. P18A
+                # removed it, shifting commands 15..24 down by one.
+                if data == b'\x0e':
+                    calibration = self.chip_config.calibrate if self.chip_config else 0xffff
+                    self.write(calibration.to_bytes(2, 'big'))
+                    continue
+                if 15 <= data[0] <= 24:
+                    data = bytes([data[0] - 1])
             if self.in_jump_table:
                 # In jump table
                 if data == b'\x01':
@@ -276,7 +285,7 @@ class P018aMockedDeviceThread:
                     self.write(b'\x03')
                 elif data == b'\x15':
                     # get protocol
-                    self.write(b'P18A')
+                    self.write(self.device.protocol)
                 elif data == b'\x16':
                     self._program_debug_vector()
                 elif data == b'\x17':
@@ -296,18 +305,21 @@ class P018aMockedDeviceThread:
                 self.write(b'O')
 
 
-class P018aMockedDevice:
+class MockedDevice:
     _dtr: bool = False
     input_buffer: bytes
     output_buffer: bytes
     """Mocked serial device that simulates RS232 behavior."""
 
-    def __init__(self) -> None:
+    def __init__(self, protocol: bytes) -> None:
+        if protocol not in (b'P014', b'P016', b'P018', b'P18A'):
+            raise ValueError(protocol)
+        self.protocol = protocol
         self.condition = threading.Condition()
         self.input_buffer = b''
         self.output_buffer = b''
         self.is_open = True
-        self.work_thread = P018aMockedDeviceThread(self)
+        self.work_thread = MockedDeviceThread(self)
 
     @property
     def dtr(self) -> bool:

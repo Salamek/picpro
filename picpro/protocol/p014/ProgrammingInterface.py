@@ -1,10 +1,14 @@
 import struct
+from dataclasses import replace
 
 from picpro.exceptions import InvalidResponseError, InvalidValueError
 from picpro.protocol.ChipConfig import ChipConfig
 from picpro.protocol.enums import HeaderEnum, ResponseEnum
 from picpro.protocol.IFuseTransaction import IFuseTransaction
 from picpro.protocol.IProgrammingInterface import IProgrammingInterface
+
+_ROM_BLANK_CHECK_PROGRESS = b'\xff'
+_ID_FUSE_SUCCESS = b'\x00'
 
 
 # @TODO Missing commands to implement: 14.
@@ -24,8 +28,7 @@ class FuseTransaction(IFuseTransaction):
         self.programming_interface.set_programming_voltages_command(on=False)
         self.programming_interface.connection.command_end()
 
-        response_enum = ResponseEnum(response)
-        if response_enum != ResponseEnum.YES:
+        if response != ResponseEnum.YES.value:
             raise InvalidResponseError
 
 
@@ -35,7 +38,7 @@ class ProgrammingInterface(IProgrammingInterface):
         """Inform PIC programmer of general parameters of PIC to be
         programmed.  Necessary for use of various other commands.
         """
-        programing_vars = self.chip_info.programming_variables
+        programing_vars = replace(self.chip_info.programming_variables)
 
         if icsp_mode:
             if programing_vars.power_sequence == 2:
@@ -83,8 +86,8 @@ class ProgrammingInterface(IProgrammingInterface):
             msg = f'Data too large for PIC ROM {data_size} > {rom_size}.'
             raise InvalidValueError(msg)
 
-        if (data_size % 32) != 0:
-            msg = 'ROM data must be a multiple of 32 bytes in size.'
+        if not data_size or (data_size % 32) != 0:
+            msg = 'ROM data must be nonempty and a multiple of 32 bytes in size.'
             raise InvalidValueError(msg)
 
         self.connection.command_start()
@@ -118,8 +121,8 @@ class ProgrammingInterface(IProgrammingInterface):
             msg = 'Data too large for PIC EEPROM.'
             raise InvalidValueError(msg)
 
-        if (byte_count % 2) != 0:
-            msg = 'EEPROM data must be a multiple of 2 bytes in size.'
+        if not byte_count or (byte_count % 2) != 0:
+            msg = 'EEPROM data must be nonempty and a multiple of 2 bytes in size.'
             raise InvalidValueError(msg)
 
         self.connection.command_start()
@@ -177,7 +180,7 @@ class ProgrammingInterface(IProgrammingInterface):
         self.set_programming_voltages_command(on=False)
         self.connection.command_end()
 
-        if response not in [b'Y', b'00']:
+        if response not in [ResponseEnum.YES.value, _ID_FUSE_SUCCESS]:
             raise InvalidResponseError
 
         if core_bits == 16:
@@ -213,7 +216,7 @@ class ProgrammingInterface(IProgrammingInterface):
         self.set_programming_voltages_command(on=False)
         self.connection.command_end()
 
-        if ResponseEnum(response) != ResponseEnum.YES:
+        if response != ResponseEnum.YES.value:
             raise InvalidResponseError
 
     def read_rom(self) -> bytes:
@@ -248,7 +251,7 @@ class ProgrammingInterface(IProgrammingInterface):
         self.set_programming_voltages_command(on=True)
         self.connection.serial_connection.write(cmd.to_bytes(1, 'little'))
         ack = self.connection.read(1)
-        if HeaderEnum(ack) != HeaderEnum.CONFIGURATION:
+        if ack != HeaderEnum.CONFIGURATION.value:
             msg = 'No acknowledgement from read_config().'
             raise InvalidResponseError(msg)
         response = self.connection.read(26)
@@ -267,31 +270,28 @@ class ProgrammingInterface(IProgrammingInterface):
         response = self.connection.read(1)
         self.set_programming_voltages_command(on=False)
         self.connection.command_end()
-        if ResponseEnum(response) != ResponseEnum.YES:
+        if response != ResponseEnum.YES.value:
             raise InvalidResponseError
 
     def rom_is_blank(self, high_byte: bytes) -> bool:
         """Returns True if PIC ROM is blank."""
         cmd = 16
 
-        expected_b_bytes = (self.chip_info.rom_size // 256) - 1
-        if expected_b_bytes <= 0:
-            msg = 'Received wrong number of "B" bytes in rom_is_blank().'
-            raise InvalidResponseError(msg)
         self.connection.command_start(cmd)
         self.connection.serial_connection.write(high_byte)
         while True:
             response = self.connection.read(1)
+            if response == _ROM_BLANK_CHECK_PROGRESS:
+                continue  # Firmware reports progress every 256 ROM words.
             self.connection.command_end()
-            response_enum = ResponseEnum(response)
-            if response_enum not in [ResponseEnum.YES, ResponseEnum.NO, ResponseEnum.INCORRECT_BYTES]:
+            if response not in [ResponseEnum.YES.value, ResponseEnum.NO.value, ResponseEnum.INCORRECT_BYTES.value]:
                 msg = f'Unexpected response in rom_is_blank(): {response!r}.'
                 raise InvalidResponseError(msg)
-            if response_enum == ResponseEnum.INCORRECT_BYTES:
+            if response == ResponseEnum.INCORRECT_BYTES.value:
                 msg = 'high_byte is incorrect.'
                 raise InvalidResponseError(msg)
 
-            return response_enum == ResponseEnum.YES
+            return response == ResponseEnum.YES.value
 
     def eeprom_is_blank(self) -> bool:
         """Returns True if PIC EEPROM is blank."""
@@ -299,12 +299,11 @@ class ProgrammingInterface(IProgrammingInterface):
         self.connection.command_start(cmd)
         response = self.connection.read(1)
         self.connection.command_end()
-        response_enum = ResponseEnum(response)
-        if response_enum not in [ResponseEnum.YES, ResponseEnum.NO]:
+        if response not in [ResponseEnum.YES.value, ResponseEnum.NO.value]:
             msg = f'Unexpected response in eeprom_is_blank(): {response!r}.'
             raise InvalidResponseError(msg)
 
-        return response_enum == ResponseEnum.YES
+        return response == ResponseEnum.YES.value
 
     def program_debug_vector(self, address: int) -> None:
         """Sets the PIC's debugging vector."""
@@ -316,12 +315,11 @@ class ProgrammingInterface(IProgrammingInterface):
         response = self.connection.read(1)
         self.connection.command_end()
 
-        response_enum = ResponseEnum(response)
-        if response_enum not in [ResponseEnum.YES, ResponseEnum.NO]:
+        if response not in [ResponseEnum.YES.value, ResponseEnum.NO.value]:
             msg = f'Unexpected response in program_debug_vector(): {response!r}.'
             raise InvalidResponseError(msg)
 
-        if response_enum != ResponseEnum.YES:
+        if response != ResponseEnum.YES.value:
             raise InvalidResponseError
 
     def read_debug_vector(self) -> int:
