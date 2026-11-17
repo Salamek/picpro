@@ -32,9 +32,11 @@ test:archlinux:
 
 package:debian:
   stage: package
+  variables:
+    PYBUILD_TEST_PYTEST: "1"
   script:
     - apt-get update -qy
-    - apt-get install -y python3-pytest-runner python3-stdeb python3-intelhex python3-pytest python3-pylint-common python3-pytest-cov python3-serial python3-requests tox dh-python python3-docopt python3-platformdirs
+    - apt-get install -y python3-stdeb python3-intelhex python3-pytest python3-pylint-common python3-pytest-cov python3-serial python3-requests tox dh-python python3-docopt python3-platformdirs python3-yaml
     - rm -rf "./deb_dist"
     - python3 setup.py --command-packages=stdeb.command bdist_deb
   tags:
