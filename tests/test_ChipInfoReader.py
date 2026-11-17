@@ -1,10 +1,12 @@
 from pathlib import Path
+from zipfile import Path as ZipPath
+from zipfile import ZipFile
 
 import pytest
 
 from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.ChipInfoReader import ChipInfoReader
-from picpro.exceptions import FuseError
+from picpro.exceptions import FormatError, FuseError
 from picpro.ProgrammingVariables import ProgrammingVariables, ProgrammingVariablesFlags
 
 
@@ -12,9 +14,9 @@ def test_be_constructed_with(chip_data_path: Path) -> None:
     ChipInfoReader(chip_data_path)
 
 
-def test_not_file() -> None:
+def test_not_file(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
-        ChipInfoReader(Path('Muhehe'))
+        ChipInfoReader(tmp_path / 'missing.cid')
 
 
 def test_get_chip(chip_info_reader: ChipInfoReader) -> None:
@@ -232,3 +234,138 @@ def test_encode_fuse_data_bad_settings(chip_info_entry: ChipInfoEntry) -> None:
 
     with pytest.raises(FuseError):
         chip_info_entry.encode_fuse_data(fuse_data)
+
+
+@pytest.fixture
+def cid_block(chip_data_path: Path) -> str:
+    return chip_data_path.read_text(encoding='utf-8').split('\n\n')[0]
+
+
+@pytest.fixture
+def cid_file(tmp_path: Path) -> Path:
+    return tmp_path / 'chips.cid'
+
+
+@pytest.mark.parametrize('name', ['12f675', '12F675'])
+def test_case_insensitive_lookup(chip_info_reader: ChipInfoReader, name: str) -> None:
+    assert chip_info_reader.get_chip(name).chip_name == '12f675'
+
+
+def test_missing_chip(chip_info_reader: ChipInfoReader) -> None:
+    with pytest.raises(KeyError):
+        chip_info_reader.get_chip('unknown')
+
+
+@pytest.mark.parametrize('content', ['', '\n\n', ' \t\n\n \n'])
+def test_empty_file(cid_file: Path, content: str) -> None:
+    cid_file.write_text(content, encoding='utf-8')
+    assert ChipInfoReader(cid_file).chip_entries == {}
+
+
+@pytest.mark.parametrize('ending', ['', '\n', '\n\n'])
+def test_block_boundaries_and_whitespace(cid_file: Path, cid_block: str, ending: str) -> None:
+    padded = '\n'.join(f' \t{line}\t ' for line in cid_block.splitlines())
+    cid_file.write_text('\n\n' + padded + ending, encoding='utf-8')
+    reader = ChipInfoReader(cid_file)
+    assert list(reader.chip_entries) == ['10f200']
+    chip = reader.get_chip('10f200')
+    assert chip.core_type == 'newf12b'
+    assert chip.rom_size == 512
+    assert chip.programming_variables.rom_size_words == 256
+    assert chip.power_sequence == 'VccVpp1'
+
+
+@pytest.mark.parametrize(('raw', 'expected'), [('Y', True), ('y', True), ('1', True), ('N', False), ('n', False), ('0', False)])
+def test_boolean_values(cid_file: Path, cid_block: str, raw: str, *, expected: bool) -> None:
+    cid_file.write_text(cid_block.replace('INCLUDE=Y', f'INCLUDE={raw}'), encoding='utf-8')
+    assert ChipInfoReader(cid_file).get_chip('10f200').include is expected
+
+
+def test_explicit_programming_defaults(cid_file: Path, cid_block: str) -> None:
+    cid_file.write_text(cid_block + '\nProgramTries=12\nOverProgram=10', encoding='utf-8')
+    chip = ChipInfoReader(cid_file).get_chip('10f200')
+    assert chip.program_tries == 12
+    assert chip.over_program == 10
+
+
+def test_legacy_metadata_optional(cid_file: Path, cid_block: str) -> None:
+    content = cid_block.replace('ProgramFlag2=1\n', '').replace('PanelSizing=0\n', '')
+    cid_file.write_text(content, encoding='utf-8')
+    chip = ChipInfoReader(cid_file).get_chip('10f200')
+    assert chip.program_tries == 1
+    assert chip.over_program == 0
+
+
+def test_socket_image_alias(cid_file: Path, cid_block: str) -> None:
+    cid_file.write_text(cid_block.replace('KITSRUS.COM=0pin', 'SocketImage=8pin'), encoding='utf-8')
+    assert ChipInfoReader(cid_file).get_chip('10f200').socket_image == '8pin'
+
+
+def test_blank_fuses_whitespace(cid_file: Path, cid_block: str) -> None:
+    cid_file.write_text(cid_block.replace('FUSEblank=0FFF', 'FUSEblank= 0fFf  \t 3fFf '), encoding='utf-8')
+    assert ChipInfoReader(cid_file).get_chip('10f200').fuse_blank == [0x0fff, 0x3fff]
+
+
+def test_fuse_options_start_at_specified_word(chip_info_reader: ChipInfoReader) -> None:
+    block: dict = {'fuses': {}}
+    chip_info_reader.parse_line(block, 'LIST12 FUSE2 "Mode" "Mixed Case"=aBcD&1234&fFfF "Off"=0000&0000&0000', 1)
+    assert block['fuses'] == {
+        'Mode': {
+            'Mixed Case': [(1, 0xabcd), (2, 0x1234), (3, 0xffff)],
+            'Off': [(1, 0), (2, 0), (3, 0)],
+        },
+    }
+
+
+def test_blank_parse_line_ignored(chip_info_reader: ChipInfoReader) -> None:
+    block: dict = {'fuses': {}}
+    chip_info_reader.parse_line(block, ' \t', 1)
+    assert block == {'fuses': {}}
+
+
+@pytest.mark.parametrize(('original', 'replacement'), [
+    ('INCLUDE=Y', 'Unknown=1'),
+    ('INCLUDE=Y', 'garbage line'),
+    ('ROMsize=000100', 'ROMsize=nothex'),
+    ('ProgramDelay=20', 'ProgramDelay=notdecimal'),
+    ('INCLUDE=Y', 'INCLUDE=maybe'),
+    ('CoreType=NewF12B\n', ''),
+    ('LIST1 FUSE1 "WDT" "Enabled"=3FFF "Disabled"=3FFB', 'LIST1 FUSE0 "WDT" "Enabled"=3FFF'),
+    ('LIST1 FUSE1 "WDT" "Enabled"=3FFF "Disabled"=3FFB', 'LIST1 FUSE1 "WDT" "Enabled"=nothex'),
+    ('LIST1 FUSE1 "WDT" "Enabled"=3FFF "Disabled"=3FFB', 'LIST1 FUSE1 "WDT" "Enabled"=3FFG'),
+    ('LIST1 FUSE1 "WDT" "Enabled"=3FFF "Disabled"=3FFB', 'LIST1 FUSE1 "WDT" garbage "Enabled"=3FFF'),
+    ('LIST1 FUSE1 "WDT" "Enabled"=3FFF "Disabled"=3FFB', 'LIST1 FUSE1 "WDT" "Enabled"=3FFF garbage "Disabled"=3FFB'),
+])
+def test_invalid_block_skipped_and_next_block_loaded(cid_file: Path, cid_block: str, caplog: pytest.LogCaptureFixture,
+                                                     original: str, replacement: str) -> None:
+    bad = cid_block.replace(original, replacement).replace('10F200', 'BAD')
+    good = cid_block.replace('10F200', 'GOOD')
+    cid_file.write_text(bad + '\n\n' + good, encoding='utf-8')
+    reader = ChipInfoReader(cid_file)
+    assert list(reader.chip_entries) == ['good']
+    assert reader.get_chip('good').rom_size == 512
+    assert len(caplog.records) == 1
+    assert 'ignoring whole block' in caplog.records[0].getMessage()
+    assert caplog.records[0].exc_info is not None
+    assert isinstance(caplog.records[0].exc_info[1], FormatError)
+
+
+@pytest.mark.parametrize('missing_field', [False, True])
+def test_invalid_last_block_skipped(cid_file: Path, cid_block: str, caplog: pytest.LogCaptureFixture, *, missing_field: bool) -> None:
+    bad = cid_block.replace('10F200', 'BAD')
+    bad = bad.replace('CoreType=NewF12B\n', '') if missing_field else bad + '\nUnknown=1'
+    cid_file.write_text(cid_block + '\n\n' + bad, encoding='utf-8')
+    assert list(ChipInfoReader(cid_file).chip_entries) == ['10f200']
+    assert len(caplog.records) == 1
+
+
+def test_read_from_zip_resource(cid_file: Path, cid_block: str) -> None:
+    archive_path = cid_file.with_suffix('.zip')
+    with ZipFile(archive_path, 'w') as archive:
+        archive.writestr('chips.cid', cid_block)
+    with ZipFile(archive_path) as archive:
+        reader = ChipInfoReader(ZipPath(archive, 'chips.cid'))
+    chip = reader.get_chip('10F200')
+    assert chip.chip_name == '10f200'
+    assert chip.rom_size == 512
+    assert chip.fuses['WDT']['Disabled'] == [(0, 0x3ffb)]

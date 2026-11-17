@@ -17,7 +17,7 @@ def handle_int(input_str: str) -> int:
 
 
 def handle_fuse_blank(input_str: str) -> list[int]:
-    return [int(x, 16) for x in input_str.strip().split(' ')]
+    return [int(x, 16) for x in input_str.split()]
 
 
 def handle_lower(input_str: str) -> str:
@@ -96,12 +96,17 @@ class ChipInfoReader:
         # Open file and split it into data blocks, so we can process data in blocks
         with file_path.open('r', encoding='UTF-8') as file:
             block: dict | None = None
+            skip_block = False
             lines = file.readlines()
             number_of_lines = len(lines)
             for line_index, line in enumerate(lines):
                 line_number = line_index + 1
                 try:
                     stripped_line = line.strip()
+                    if skip_block:
+                        if not stripped_line:
+                            skip_block = False
+                        continue
                     if stripped_line:
                         # We have line, add to current block
                         if not block:
@@ -112,17 +117,23 @@ class ChipInfoReader:
                     if block and (not stripped_line or line_number == number_of_lines):
                         # Empty line or end of file means end of block
                         # @TODO We don't know what these are doing?!
-                        del block['program_flag_2']
-                        del block['panel_sizing']
+                        block.pop('program_flag_2', None)
+                        block.pop('panel_sizing', None)
 
                         # These are ignored in new file format
                         block['program_tries'] = block.get('program_tries', 1)
                         block['over_program'] = block.get('over_program', 0)
-                        self.chip_entries[block['chip_name']] = ChipInfoEntry(**block)
+                        try:
+                            entry = ChipInfoEntry.from_dict(block)
+                        except TypeError as e:
+                            msg = f'Invalid chip definition ending at line {line_number}: {e}'
+                            raise FormatError(msg) from e
+                        self.chip_entries[entry.chip_name] = entry
                         block = None
                 except FormatError as e:
-                    # Destroy this block
+                    # Discard the entire damaged entry, including its remaining lines.
                     block = None
+                    skip_block = bool(stripped_line)
                     log.exception('Parsing of line %s failed, ignoring whole block...', line_number, exc_info=e)
 
     def parse_line(self, block: dict, line: str, line_number: int) -> None:
@@ -136,12 +147,15 @@ class ChipInfoReader:
             try:
                 found_special_handler = self._special_handlers.get(lhs)
                 if found_special_handler:
-                    block[lhs] = found_special_handler(rhs.lower())
+                    value = found_special_handler(rhs.lower())
+                    if value is None:
+                        msg = f'Invalid value for {lhs_raw} at line {line_number}: {rhs}'
+                        raise FormatError(msg)
+                    block[lhs] = value
                 else:
                     block[lhs] = rhs
-            except NameError as e:
-                # Some extraneous line in the file...  do we care?
-                msg = f'Assignment outside of chip definition @{line_number}: {line}.'
+            except ValueError as e:
+                msg = f'Invalid assignment at line {line_number}: {line}.'
                 raise FormatError(msg) from e
 
         else:
@@ -150,18 +164,27 @@ class ChipInfoReader:
                 fuse, name, values_string = match_fuse_list_regexp.groups()
 
                 fuses = {}
-                values = self.fuse_value_regexp.findall(values_string)
-                for value_pair in values:
-                    lhs, rhs = value_pair
+                fuse_number = int(fuse)
+                if fuse_number < 1:
+                    msg = f'Invalid fuse number at line {line_number}: {fuse}'
+                    raise FormatError(msg)
+                position = 0
+                for match in self.fuse_value_regexp.finditer(values_string):
+                    if values_string[position:match.start()].strip():
+                        msg = f'Invalid fuse settings at line {line_number}: {values_string}'
+                        raise FormatError(msg)
+                    lhs, rhs = match.groups()
+                    position = match.end()
                     # rhs may have multiple fuse values, in the form
                     #   xxxx&xxxx&xxxx...
                     # This means that each xxxx applies to the next
                     # consecutive fuse.
                     fuse_values = [int(xstr, 16) for xstr in rhs.split('&')]
-                    fuse_number = int(fuse)
-
                     fuses[lhs] = list(zip(range(fuse_number - 1, (fuse_number + len(fuse_values) - 1)), fuse_values, strict=True))
 
+                if not fuses or values_string[position:].strip():
+                    msg = f'Invalid fuse settings at line {line_number}: {values_string}'
+                    raise FormatError(msg)
                 block['fuses'][name] = fuses
             elif self.non_blank_regexp.match(line):
                 msg = f'Unrecognized line format {line}.'
