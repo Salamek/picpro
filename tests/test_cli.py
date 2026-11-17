@@ -3,6 +3,7 @@ import importlib
 import json
 import os
 import runpy
+import shutil
 import subprocess
 import sys
 import threading
@@ -10,13 +11,14 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+from zipfile import ZipFile
 
 import pytest
+import yaml
 from intelhex import IntelHex
 
 from picpro import __version__
 from picpro.ChipDataReader import ChipDataReader
-from picpro.ChipInfoReader import ChipInfoReader
 from picpro.exceptions import InvalidResponseError
 from picpro.FlashData import FlashData
 from picpro.protocol.ChipConfig import ChipConfig
@@ -86,8 +88,13 @@ class CLI:
 def cli(tmp_path: Path, chip_data_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> Iterator[CLI]:
     data_dir = tmp_path / 'data'
     data_dir.mkdir()
-    database = data_dir / 'chipdata.cid'
-    database.write_bytes(chip_data_path.read_bytes())
+    database = data_dir / 'chip-data.d'
+    database.mkdir()
+    packaged = _ROOT / 'picpro' / 'data' / 'chip-data.d'
+    for name in ['10f200', '16f737', '12f675']:
+        shutil.copy2(packaged / f'{name}.yml', database / f'{name}.yml')
+    # A legacy file remains available only for explicit migration tests.
+    (data_dir / 'chipdata.cid').write_bytes(chip_data_path.read_bytes())
     monkeypatch.setattr('platformdirs.user_data_dir', lambda _app: str(data_dir))
     image_path = tmp_path / 'firmware.hex'
     image = IntelHex()
@@ -96,7 +103,7 @@ def cli(tmp_path: Path, chip_data_path: Path, monkeypatch: pytest.MonkeyPatch, c
     image.frombytes(b'\xff\x31', offset=0x400e)
     image.frombytes(b'\x11\x00\x22\x00', offset=0x4200)
     image.write_hex_file(str(image_path))
-    chip = ChipInfoReader(database).get_chip('12f675')
+    chip = ChipDataReader(database).get_chip('12f675')
     expected = FlashData(chip, image)
     expected.set_calibration_word(b'\x34\x56')
     config = ChipConfig(chip_id=0x0fc0, id=b'12345678', fuses=[0x31ff] + [0] * 6, calibrate=0x3456)
@@ -309,9 +316,8 @@ def test_programmer_info_connection_errors(cli: CLI, error: Exception, message: 
 
 def test_migrate_command_writes_yaml_chip_definitions(cli: CLI, tmp_path: Path) -> None:
     cli.monkeypatch.chdir(tmp_path)
-    output = tmp_path / 'picpro' / 'data' / 'chip-data.d'
-    output.mkdir(parents=True)
-    result = cli.run('chipdata_migrate')
+    output = tmp_path / 'converted'
+    result = cli.run('chipdata_migrate', str(cli.database.parent / 'chipdata.cid'), '--output', str(output))
     assert result.code == 0
     chips = ChipDataReader(output).chip_entries
     assert set(chips) == {'10f200', '16f737', '12f675'}
@@ -324,11 +330,8 @@ def test_migrate_command_writes_yaml_chip_definitions(cli: CLI, tmp_path: Path) 
 
 @pytest.mark.parametrize('verification_fails', [False, True])
 def test_pic18_fuses_commit_only_after_successful_verification(cli: CLI, *, verification_fails: bool) -> None:
-    packaged_cid = (_ROOT / 'picpro' / 'data' / 'chipdata.cid').read_text(encoding='utf-8')
-    block = next(block for block in packaged_cid.split('\n\n') if block.startswith('CHIPname=18F2550\n'))
-    with cli.database.open('a', encoding='utf-8') as database:
-        database.write('\n\n' + block)
-    chip = ChipInfoReader(cli.database).get_chip('18f2550')
+    shutil.copy2(_ROOT / 'picpro' / 'data' / 'chip-data.d' / '18f2550.yml', cli.database / '18f2550.yml')
+    chip = ChipDataReader(cli.database).get_chip('18f2550')
     image = IntelHex()
     image.frombytes(b'\x34\x12')
     image.frombytes(b'\x11\x22\x33\x44', offset=0xf00000)
@@ -357,3 +360,43 @@ def test_pic18_fuses_commit_only_after_successful_verification(cli: CLI, *, veri
         assert state.chip_config.fuses == chip.fuse_blank
         assert state.pending_fuses is None
     assert not cli.device.is_open
+
+
+def test_normal_commands_use_yaml_without_parsing_legacy_cid(cli: CLI) -> None:
+    # A broken legacy file must not affect normal commands after migration.
+    (cli.database.parent / 'chipdata.cid').write_text('not a chip database', encoding='utf-8')
+    chip_file = cli.database / '12f675.yml'
+    data = yaml.safe_load(chip_file.read_text(encoding='utf-8'))
+    data['program_delay'] = 42
+    chip_file.write_text(yaml.safe_dump(data), encoding='utf-8')
+    result = cli.run('chip_info', '12F675')
+    assert result.code == 0
+    assert json.loads(result.stdout)['program_delay'] == 42
+    assert result.stderr == ''
+
+
+def test_default_migration_uses_user_legacy_file_and_user_yaml_directory(cli: CLI) -> None:
+    result = cli.run('chipdata_migrate')
+    assert result.code == 0
+    chips = ChipDataReader(cli.database).chip_entries
+    assert set(chips) == {'10f200', '16f737', '12f675'}
+    assert chips['12f675'].rom_size == 2048
+    assert chips['12f675'].socket_image == 'dip8'
+
+
+def test_packaged_yaml_cli_works_without_any_bundled_cid(tmp_path: Path) -> None:
+    archive_path = tmp_path / 'picpro-yaml.zip'
+    with ZipFile(archive_path, 'w') as archive:
+        for path in (_ROOT / 'picpro').rglob('*'):
+            if path.is_file() and path.suffix in ('.py', '.yml'):
+                archive.write(path, path.relative_to(_ROOT))
+    result = subprocess.run(
+        [sys.executable, '-m', 'picpro', 'chip_info', '12F675'], cwd=tmp_path,
+        env={**os.environ, 'PYTHONPATH': str(archive_path), 'XDG_DATA_HOME': str(tmp_path / 'user-data')},
+        capture_output=True, text=True, timeout=10, check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    data = json.loads(result.stdout)
+    assert data['chip_name'] == '12f675'
+    assert data['rom_size'] == 2048
+    assert data['socket_image'] == 'dip8'

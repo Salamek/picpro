@@ -15,7 +15,7 @@ Command details:
     hex_info            Prints information about hexfile.
     programmer_info     Print information about your programmer.
     read_chip_config    Read config from chip.
-    chipdata_migrate    Migrate chip data to new format.
+    chipdata_migrate    Convert legacy CID chip definitions to YAML.
 
 Usage:
     picpro program -p PORT -i HEX_FILE -t PIC_TYPE [--id=PIC_ID] [--fuse=FUSE_NAME:FUSE_VALUE...] [--icsp]
@@ -27,12 +27,13 @@ Usage:
     picpro hex_info <HEX_FILE> <PIC_TYPE>
     picpro programmer_info -p PORT
     picpro decode_fuses <fuses> -t PIC_TYPE
-    picpro chipdata_migrate
+    picpro chipdata_migrate [<CID_FILE>] [--output=OUTPUT_DIR]
     picpro (-h | --help)
     picpro (-v | --version)
 
 
 Options:
+    --output=OUTPUT_DIR              Directory for migrated YAML chip definitions.
     --icsp                           Enable ISCP programming.
     --fuse=FUSE_NAME:FUSE_VALUE      Set fuse value directly.
     --id=PIC_ID                      Set PIC id to be programmed in pic HEX format.
@@ -61,6 +62,7 @@ from platformdirs import user_data_dir
 from yaml import ScalarNode
 
 import picpro as app_root
+from picpro.ChipDataReader import ChipDataReader
 from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.ChipInfoReader import ChipInfoReader
 from picpro.exceptions import FuseError, InvalidResponseError
@@ -125,10 +127,24 @@ def command(name: str | None = None) -> Callable[[Callable[..., CT]], Callable[.
 
 def _find_chip_data() -> Path | Traversable:
     path_list: list[Path | Traversable] = [
+        Path(user_data_dir('picpro')) / 'chip-data.d',
+        Path('/usr/share/picpro/chip-data.d'),
+        APP_ROOT_FOLDER / 'chip-data.d',
+        files('picpro') / 'data' / 'chip-data.d',
+    ]
+    found = next((directory for directory in path_list if directory.is_dir()), None)
+    if found is None:
+        msg = "YAML chip data directory 'chip-data.d' was not found in any search path."
+        raise FileNotFoundError(msg)
+    return found
+
+
+def _find_legacy_chip_data() -> Path | Traversable:
+    path_list: list[Path | Traversable] = [
         Path(user_data_dir('picpro')) / 'chipdata.cid',
         Path('/usr/share/picpro/chipdata.cid'),
         APP_ROOT_FOLDER / 'chipdata.cid',
-        files('picpro.data') / 'chipdata.cid',
+        files('picpro') / 'data' / 'chipdata.cid',
     ]
 
     found = next((f for f in path_list if f.is_file()), None)
@@ -195,7 +211,7 @@ def program() -> None:
     hex_file = Path(OPTIONS['--hex_file'])
     try:
         intel_hex = IntelHex(str(hex_file))
-        chip_info_reader = ChipInfoReader(_find_chip_data())
+        chip_info_reader = ChipDataReader(_find_chip_data())
         chip_info_entry = chip_info_reader.get_chip(OPTIONS['--pic_type'])
         try:
             flash_data = FlashData(chip_info_entry, intel_hex, fuses=fuses, pic_id=OPTIONS['--id'])
@@ -244,9 +260,8 @@ def program() -> None:
             print('Invalid fuse setting. Fuse names and valid settings for this chip are as follows:')
             print(chip_info_entry.fuse_doc)
     except OSError:
-        print('Unable to locate chipinfo.cid file.')
-        print('Please verify that file is present in the same directory as this script, '
-              'and that the filename is in lowercase characters, and that you have access to read the file.')
+        print('Unable to read input/output files or YAML chip definitions in chip-data.d.')
+        print('Please verify the paths and file permissions.')
 
 
 @command()
@@ -254,7 +269,7 @@ def verify() -> None:
     hex_file = Path(OPTIONS['--hex_file'])
     try:
         intel_hex = IntelHex(str(hex_file))
-        chip_info_reader = ChipInfoReader(_find_chip_data())
+        chip_info_reader = ChipDataReader(_find_chip_data())
         chip_info_entry = chip_info_reader.get_chip(OPTIONS['--pic_type'])
         flash_data = FlashData(chip_info_entry, intel_hex)
         print('Opening connection to programmer...')
@@ -272,9 +287,8 @@ def verify() -> None:
                     sys.exit(1)
                 print('Done!')
     except OSError:
-        print('Unable to locate chipinfo.cid file.')
-        print('Please verify that file is present in the same directory as this script, '
-              'and that the filename is in lowercase characters, and that you have access to read the file.')
+        print('Unable to read input/output files or YAML chip definitions in chip-data.d.')
+        print('Please verify the paths and file permissions.')
 
 
 @command()
@@ -282,7 +296,7 @@ def dump() -> None:
     mem_type = OPTIONS['<mem_type>']
     output_file = Path(OPTIONS['--hex_file'])
     try:
-        chip_info_reader = ChipInfoReader(_find_chip_data())
+        chip_info_reader = ChipDataReader(_find_chip_data())
         chip_info_entry = chip_info_reader.get_chip(OPTIONS['--pic_type'])
         print('Opening connection to programmer...')
         with Connection(OPTIONS['--port']) as connection:
@@ -316,15 +330,14 @@ def dump() -> None:
                         intel_hex.write_hex_file(file)
                 print('Done!')
     except OSError:
-        print('Unable to locate chipinfo.cid file.')
-        print('Please verify that file is present in the same directory as this script, '
-              'and that the filename is in lowercase characters, and that you have access to read the file.')
+        print('Unable to read input/output files or YAML chip definitions in chip-data.d.')
+        print('Please verify the paths and file permissions.')
 
 
 @command()
 def erase() -> None:
     try:
-        chip_info_reader = ChipInfoReader(_find_chip_data())
+        chip_info_reader = ChipDataReader(_find_chip_data())
         chip_info_entry = chip_info_reader.get_chip(OPTIONS['--pic_type'])
         print('Opening connection to programmer...')
         with Connection(OPTIONS['--port']) as connection:
@@ -334,9 +347,8 @@ def erase() -> None:
                 programming_interface.erase_chip()
                 print('Done!')
     except OSError:
-        print('Unable to locate chipinfo.cid file.')
-        print('Please verify that file is present in the same directory as this script, '
-              'and that the filename is in lowercase characters, and that you have access to read the file.')
+        print('Unable to read input/output files or YAML chip definitions in chip-data.d.')
+        print('Please verify the paths and file permissions.')
 
 
 @command()
@@ -344,7 +356,7 @@ def chip_info() -> None:
     pic_type = OPTIONS['<PIC_TYPE>']
     # Get chip info
     chip_info_filename = _find_chip_data()
-    chip_info_reader = ChipInfoReader(chip_info_filename)
+    chip_info_reader = ChipDataReader(chip_info_filename)
 
     data = chip_info_reader.get_chip(pic_type).to_dict() if pic_type else {chip_name: entry.to_dict() for chip_name, entry in chip_info_reader.chip_entries.items()}
 
@@ -366,11 +378,10 @@ def hex_info() -> None:
 
     # Get chip info
     try:
-        chip_info_reader = ChipInfoReader(_find_chip_data())
+        chip_info_reader = ChipDataReader(_find_chip_data())
     except OSError:
-        print('Unable to locate chipinfo.cid file.')
-        print('Please verify that file is present in the same directory as this script, '
-              'and that the filename is in lowercase characters, and that you have access to read the file.')
+        print('Unable to read input/output files or YAML chip definitions in chip-data.d.')
+        print('Please verify the paths and file permissions.')
         return
 
     try:
@@ -438,7 +449,7 @@ def decode_fuses() -> None:
     fuses = [int(f) for f in OPTIONS['<fuses>'].split()]
     # Get chip info
     chip_info_filename = _find_chip_data()
-    chip_info_reader = ChipInfoReader(chip_info_filename)
+    chip_info_reader = ChipDataReader(chip_info_filename)
 
     chip_info_entry = chip_info_reader.get_chip(pic_type)
     print(chip_info_entry.decode_fuse_data(fuses))
@@ -447,7 +458,7 @@ def decode_fuses() -> None:
 @command()
 def read_chip_config() -> None:
     try:
-        chip_info_reader = ChipInfoReader(_find_chip_data())
+        chip_info_reader = ChipDataReader(_find_chip_data())
         chip_info_entry = chip_info_reader.get_chip(OPTIONS['--pic_type'])
         print('Opening connection to programmer...')
         with Connection(OPTIONS['--port']) as connection:
@@ -461,16 +472,16 @@ def read_chip_config() -> None:
 
                 print('Done!')
     except OSError:
-        print('Unable to locate chipinfo.cid file.')
-        print('Please verify that file is present in the same directory as this script, '
-              'and that the filename is in lowercase characters, and that you have access to read the file.')
+        print('Unable to read input/output files or YAML chip definitions in chip-data.d.')
+        print('Please verify the paths and file permissions.')
 
 
 @command()
 def chipdata_migrate() -> None:
-    chip_info_reader = ChipInfoReader(_find_chip_data())
-
-    output_dir = Path('./picpro/data/chip-data.d')
+    source = Path(OPTIONS['<CID_FILE>']) if OPTIONS['<CID_FILE>'] else _find_legacy_chip_data()
+    chip_info_reader = ChipInfoReader(source)
+    output_dir = Path(OPTIONS['--output']) if OPTIONS['--output'] else Path(user_data_dir('picpro')) / 'chip-data.d'
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     def hex_string_representer(dumper: yaml.Dumper, data: str) -> ScalarNode:
         if isinstance(data, str) and data.startswith('0x'):

@@ -1,4 +1,5 @@
 import logging
+from importlib.resources.abc import Traversable
 from pathlib import Path
 
 import yaml
@@ -9,7 +10,10 @@ log = logging.getLogger(__name__)
 
 
 class ChipDataReader:
-    def __init__(self, data_dir: Path) -> None:
+    def __init__(self, data_dir: Path | Traversable) -> None:
+        if not data_dir.is_dir():
+            msg = f'Chip data directory does not exist: {data_dir}'
+            raise FileNotFoundError(msg)
         self._data_dir = data_dir
 
     def get_chip(self, name: str) -> ChipInfoEntry:
@@ -22,9 +26,11 @@ class ChipDataReader:
     @property
     def chip_entries(self) -> dict[str, ChipInfoEntry]:
         entries = {}
-        for path in sorted(self._data_dir.glob('*.yml')):
+        for path in sorted(self._data_dir.iterdir(), key=lambda entry: entry.name):
+            if not path.is_file() or not path.name.endswith('.yml'):
+                continue
             with path.open('r', encoding='UTF-8') as file:
-                entries[path.stem] = self._parse(yaml.safe_load(file))
+                entries[Path(path.name).stem] = self._parse(yaml.safe_load(file))
         return entries
 
     @staticmethod

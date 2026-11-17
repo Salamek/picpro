@@ -1,5 +1,7 @@
 from pathlib import Path
 from typing import TextIO, cast
+from zipfile import Path as ZipPath
+from zipfile import ZipFile
 
 import pytest
 import yaml
@@ -182,3 +184,23 @@ def test_packaged_yaml_matches_cid() -> None:
             assert chip.pin1_location_text == cid_entries[name].pin1_location_text, name
         assert chip.programming_variables == cid_entries[name].programming_variables, name
         assert yaml_reader.get_chip(name.upper()) == chip, name
+
+
+def test_missing_data_directory(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match='Chip data directory does not exist'):
+        ChipDataReader(tmp_path / 'missing')
+
+
+def test_read_yaml_from_zip_resources(tmp_path: Path) -> None:
+    archive_path = tmp_path / 'chips.zip'
+    with ZipFile(archive_path, 'w') as archive:
+        archive.writestr('definitions/testchip.yml', _CHIP_YAML)
+        archive.writestr('definitions/notes.txt', 'ignore this')
+        archive.writestr('definitions/subdir.yml/', '')
+    with ZipFile(archive_path) as archive:
+        reader = ChipDataReader(ZipPath(archive, 'definitions/'))
+        chip = reader.get_chip('TESTCHIP')
+        assert chip.rom_size == 8192
+        assert chip.fuse_blank == [0x3ffe, 0x3fff]
+        assert list(reader.chip_entries) == ['testchip']
+        assert reader.chip_entries['testchip'] == chip

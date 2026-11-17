@@ -58,6 +58,34 @@ and then install by running
 pacman -Sy picpro
 ```
 
+## Chip definitions
+
+Normal commands use one YAML file per chip in `chip-data.d`. The first existing
+chip directory is selected, in this order:
+
+1. `chip-data.d` inside the user's picpro data directory (usually
+   `~/.local/share/picpro/chip-data.d` on Linux).
+2. `/usr/share/picpro/chip-data.d`.
+3. `chip-data.d` next to the installed picpro Python package.
+4. The bundled `picpro/data/chip-data.d` definitions.
+
+The selected directory supplies the entire chip database. Copy the bundled YAML
+files into your custom directory if you want to keep all supported chips while
+editing individual definitions.
+
+Legacy `chipdata.cid` files are no longer used by normal commands. The CID parser
+and legacy database remain available for compatibility and conversion. To migrate
+custom definitions into the user's YAML directory, run:
+
+```bash
+picpro chipdata_migrate /path/to/chipdata.cid
+```
+
+Use `--output=/path/to/chip-data.d` to choose another destination. Running
+`picpro chipdata_migrate` without an input path searches the legacy user, system,
+package-adjacent, and bundled CID locations. Conversion creates the destination
+and replaces YAML files for chips found in the input database.
+
 ## Usage
 
 ```text

@@ -9,7 +9,7 @@ from intelhex import IntelHex
 
 @pytest.mark.parametrize('binary', [False, True])
 @pytest.mark.parametrize('memory', ['eeprom', 'rom'])
-def test_dump_byte_order(tmp_path: Path, chip_data_path: Path, monkeypatch: pytest.MonkeyPatch,
+def test_dump_byte_order(tmp_path: Path, yaml_chip_data_path: Path, monkeypatch: pytest.MonkeyPatch,
                          memory: str, *, binary: bool) -> None:
     # The CLI parses arguments at import time; supply a valid command before
     # invoking dump() with its test-specific options and mocked hardware.
@@ -20,7 +20,7 @@ def test_dump_byte_order(tmp_path: Path, chip_data_path: Path, monkeypatch: pyte
         '<mem_type>': memory, '--hex_file': str(output), '--pic_type': '12f675',
         '--port': '/dev/fake', '--binary': binary, '--icsp': False,
     })
-    monkeypatch.setattr(cli, '_find_chip_data', lambda: chip_data_path)
+    monkeypatch.setattr(cli, '_find_chip_data', lambda: yaml_chip_data_path)
     factory = MagicMock(spec=cli.Connection)
     programmer = factory.return_value.__enter__.return_value.get_programming_interface.return_value.__enter__.return_value
     payload = b'\x11\x22\x00\xff'
