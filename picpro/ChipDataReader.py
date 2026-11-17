@@ -21,10 +21,11 @@ class ChipDataReader:
 
     @property
     def chip_entries(self) -> dict[str, ChipInfoEntry]:
-        return {
-            p.stem: self._parse(yaml.safe_load(p.open('r', encoding='UTF-8')))
-            for p in sorted(self._data_dir.glob('*.yml'))
-        }
+        entries = {}
+        for path in sorted(self._data_dir.glob('*.yml')):
+            with path.open('r', encoding='UTF-8') as file:
+                entries[path.stem] = self._parse(yaml.safe_load(file))
+        return entries
 
     @staticmethod
     def _parse(data: dict) -> ChipInfoEntry:
