@@ -8,7 +8,7 @@ url='https://github.com/Salamek/picpro'
 makedepends=(python-build python-installer python-wheel python-setuptools)
 depends=(
     'python'
-    'python-docopt'
+    'python-typer>=0.15.2'
     'python-pyserial'
     'python-intelhex'
     'python-yaml'

@@ -1,60 +1,14 @@
 #!/usr/bin/python
-"""Main entry-point into the 'pic_k150_programmer' CLI application.
-
-The picpro3 provides a simple program-level and command-line-level interface to the PIC programmers made by kitsrus.com. (K150 and compatible)
-
-License: GPL2
-Website: https://gitlab.salamek.cz/sadam/pic_k150_programmer.git
-
-Command details:
-    program             Program PIC chip.
-    verify              Verify PIC flash.
-    dump                Dump PIC data as binary.
-    erase               Erase PIC.
-    chip_info           Prints chip info as JSON in terminal.
-    hex_info            Prints information about hexfile.
-    programmer_info     Print information about your programmer.
-    read_chip_config    Read config from chip.
-    chipdata_migrate    Convert legacy CID chip definitions to YAML.
-
-Usage:
-    picpro program -p PORT -i HEX_FILE -t PIC_TYPE [--id=PIC_ID] [--fuse=FUSE_NAME:FUSE_VALUE...] [--icsp]
-    picpro verify -p PORT -i HEX_FILE -t PIC_TYPE [--icsp]
-    picpro erase -p PORT -t PIC_TYPE [--icsp]
-    picpro dump <mem_type> -p PORT -o HEX_FILE -t PIC_TYPE [--icsp] [--binary]
-    picpro chip_info [<PIC_TYPE>]
-    picpro read_chip_config -p PORT -t PIC_TYPE [--icsp]
-    picpro hex_info <HEX_FILE> <PIC_TYPE>
-    picpro programmer_info -p PORT
-    picpro decode_fuses <fuses> -t PIC_TYPE
-    picpro chipdata_migrate [<CID_FILE>] [--output=OUTPUT_DIR]
-    picpro (-h | --help)
-    picpro (-v | --version)
-
-
-Options:
-    --output=OUTPUT_DIR              Directory for migrated YAML chip definitions.
-    --icsp                           Enable ISCP programming.
-    --fuse=FUSE_NAME:FUSE_VALUE      Set fuse value directly.
-    --id=PIC_ID                      Set PIC id to be programmed in pic HEX format.
-    -p PORT --port=PORT              Set serial port where programmer is connected.
-    -t PIC_TYPE --pic_type=PIC_TYPE  Pic type you are programming/reading.
-    -i HEX_FILE --hex_file=HEX_FILE  Hex file to flash or to read.
-    -o HEX_FILE --hex_file=HEX_FILE  Hex file to write.
-    --binary                         Input/Output file is in binary.
-    -v --version                     Display version info
-"""
+"""Typer command-line adapter for the PicPro application service."""
 
 import json
 import signal
 import sys
-from collections.abc import Callable
-from functools import wraps
 from importlib.resources.abc import Traversable
 from pathlib import Path
-from typing import TypeVar
+from typing import Annotated
 
-from docopt import docopt
+import typer
 from intelhex import IntelHex
 
 import picpro as app_root
@@ -66,55 +20,27 @@ from picpro.protocol.ChipConfig import ChipConfig
 from picpro.protocol.p18a.Connection import Connection
 from picpro.tools import swab_bytes
 
-OPTIONS = docopt(__doc__)
-CT = TypeVar('CT')
+app = typer.Typer(
+    help='Program and inspect PIC chips using kitsrus K150-compatible programmers.',
+    context_settings={'help_option_names': ['-h', '--help']},
+)
 
-if OPTIONS['--version']:
-    print(app_root.__version__)
-    sys.exit(0)
+Port = Annotated[str, typer.Option('--port', '-p', help='Serial port connected to the programmer.')]
+ChipType = Annotated[str, typer.Option('--pic_type', '-t', help='PIC chip type.')]
+InputFile = Annotated[Path, typer.Option('--hex_file', '-i', help='Intel HEX input file.')]
+OutputFile = Annotated[Path, typer.Option('--hex_file', '-o', help='Output file.')]
+ICSP = Annotated[bool, typer.Option('--icsp', help='Enable ICSP programming.')]
 
 
-def command(name: str | None = None) -> Callable[[Callable[..., CT]], Callable[..., CT]]:
-    """Decorator that registers the chosen command/function.
+def _version(value: bool) -> None:  # noqa: FBT001 - Typer option callback signature
+    if value:
+        print(app_root.__version__)
+        raise typer.Exit
 
-    If a function is decorated with @command but that function name is not a valid "command" according to the docstring,
-    a KeyError will be raised, since that's a bug in this script.
 
-    If a user doesn't specify a valid command in their command line arguments, the above docopt(__doc__) line will print
-    a short summary and call sys.exit() and stop up there.
-
-    If a user specifies a valid command, but for some reason the developer did not register it, an AttributeError will
-    raise, since it is a bug in this script.
-
-    Finally, if a user specifies a valid command and it is registered with @command below, then that command is "chosen"
-    by this decorator function, and set as the attribute `chosen`. It is then executed below in
-    `if __name__ == '__main__':`.
-
-    Doing this instead of using Flask-Script.
-
-    Positional arguments:
-    func -- the function to decorate
-    """
-
-    def function_wrap(func: Callable[..., CT]) -> Callable[..., CT]:
-
-        @wraps(func)
-        def wrapped() -> CT:
-            return func()
-
-        command_name = name or func.__name__
-
-        # Register chosen function.
-        if command_name not in OPTIONS:
-            msg = f'Cannot register {command_name}, not mentioned in docstring/docopt.'
-            raise KeyError(msg)
-        if OPTIONS[command_name]:
-            command.chosen = func  # type: ignore[attr-defined]
-
-        return wrapped
-
-    return function_wrap
-
+@app.callback()
+def cli(*, version: Annotated[bool, typer.Option('--version', '-v', callback=_version, is_eager=True, help='Display version.')] = False) -> None:
+    """Select a command; use COMMAND --help for its arguments and options."""
 
 
 def _find_chip_data() -> Path | Traversable:
@@ -131,7 +57,7 @@ def _print_chip_config(chip_config: ChipConfig, chip_info_entry: ChipInfoEntry) 
 
 
 
-def _display_event(event: PicProEvent, operation: str) -> None:
+def _display_event(event: PicProEvent, operation: str, output_file: Path | None = None) -> None:
     if operation == 'programmer_info':
         return
     if isinstance(event, ChipConfigEvent):
@@ -154,7 +80,7 @@ def _display_event(event: PicProEvent, operation: str) -> None:
     elif isinstance(event, StageEvent):
         if operation == 'dump' and event.stage in (Stage.READING_ROM, Stage.READING_EEPROM, Stage.READING_CONFIG):
             memory = {Stage.READING_ROM: 'ROM', Stage.READING_EEPROM: 'EEPROM', Stage.READING_CONFIG: 'CONFIG'}[event.stage]
-            print(f"Reading {memory} into file {OPTIONS['--hex_file']}...")
+            print(f'Reading {memory} into file {output_file}...')
         elif event.stage == Stage.COMPLETED and operation == 'dump':
             return  # File output completes after the service has released the device.
         else:
@@ -178,16 +104,12 @@ def _display_event(event: PicProEvent, operation: str) -> None:
                 print(message)
 
 
-def _service(operation: str) -> PicPro:
+def _service(operation: str, output_file: Path | None = None) -> PicPro:
     return PicPro(
         chip_data=ChipDataReader(_find_chip_data()) if operation != 'programmer_info' else None,
         connection_factory=Connection,
-        on_event=lambda event: _display_event(event, operation),
+        on_event=lambda event: _display_event(event, operation, output_file),
     )
-
-
-def _target() -> Target:
-    return Target(OPTIONS['--port'], OPTIONS['--pic_type'], OPTIONS['--icsp'])
 
 
 def _file_error() -> None:
@@ -195,46 +117,59 @@ def _file_error() -> None:
     print('Please verify the paths and file permissions.')
 
 
-@command()
-def program() -> None:
-    fuses = dict(fuse.split(':') for fuse in OPTIONS['--fuse'])
+@app.command()
+def program(port: Port, pic_type: ChipType, hex_file: InputFile, *,
+            pic_id: Annotated[str | None, typer.Option('--id', help='PIC ID in hexadecimal.')] = None,
+            fuse: Annotated[list[str] | None, typer.Option('--fuse', help='NAME:VALUE fuse setting; repeat for multiple fuses.')] = None,
+            icsp: ICSP = False) -> None:
+    """Program a PIC chip and verify its contents."""
+    fuses = {}
+    for setting in fuse or []:
+        name, separator, value = setting.partition(':')
+        if not separator or not name or not value:
+            msg = 'Expected NAME:VALUE.'
+            raise typer.BadParameter(msg, param_hint='--fuse')
+        fuses[name] = value
     try:
         service = _service('program')
         try:
-            result = service.program(_target(), Path(OPTIONS['--hex_file']), pic_id=OPTIONS['--id'], fuses=fuses)
+            result = service.program(Target(port, pic_type, icsp), hex_file, pic_id=pic_id, fuses=fuses)
         except FuseError:
             print('Invalid fuse setting. Fuse names and valid settings for this chip are as follows:')
-            print(service.get_chip(OPTIONS['--pic_type']).fuse_doc)
+            print(service.get_chip(pic_type).fuse_doc)
             return
         if not result.success:
-            sys.exit(1)
+            raise typer.Exit(1)
     except OSError:
         _file_error()
 
 
-@command()
-def verify() -> None:
+@app.command()
+def verify(port: Port, pic_type: ChipType, hex_file: InputFile, *, icsp: ICSP = False) -> None:
+    """Verify PIC flash against an Intel HEX file."""
     try:
-        result = _service('verify').verify(_target(), Path(OPTIONS['--hex_file']))
+        result = _service('verify').verify(Target(port, pic_type, icsp), hex_file)
         if not result.success:
-            sys.exit(1)
+            raise typer.Exit(1)
     except OSError:
         _file_error()
 
 
-@command()
-def dump() -> None:
-    output_file = Path(OPTIONS['--hex_file'])
+@app.command()
+def dump(mem_type: Annotated[MemoryType, typer.Argument(help='Memory to read: rom, eeprom, or config.')],
+         port: Port, pic_type: ChipType, output_file: OutputFile, *, icsp: ICSP = False,
+         binary: Annotated[bool, typer.Option('--binary', help='Write raw binary instead of Intel HEX.')] = False) -> None:
+    """Dump PIC memory to a file."""
     try:
-        memory = MemoryType(OPTIONS['<mem_type>'])
+        memory = mem_type
         try:
-            content = _service('dump').read_memory(_target(), memory)
+            content = _service('dump', output_file).read_memory(Target(port, pic_type, icsp), memory)
         except NoEEPROMError:
             print('This chip has no EEPROM!')
             return
         if memory == MemoryType.ROM:
             content = swab_bytes(content)
-        if OPTIONS['--binary']:
+        if binary:
             output_file.write_bytes(content)
         else:
             image = IntelHex()
@@ -246,26 +181,28 @@ def dump() -> None:
         _file_error()
 
 
-@command()
-def erase() -> None:
+@app.command()
+def erase(port: Port, pic_type: ChipType, *, icsp: ICSP = False) -> None:
+    """Erase a PIC chip."""
     try:
-        _service('erase').erase(_target())
+        _service('erase').erase(Target(port, pic_type, icsp))
     except OSError:
         _file_error()
 
 
-@command()
-def chip_info() -> None:
+@app.command('chip_info')
+def chip_info(pic_type: Annotated[str | None, typer.Argument(help='PIC type; omit to list all chips.')] = None) -> None:
+    """Print chip definitions as JSON."""
     service = _service('chip_info')
-    name = OPTIONS['<PIC_TYPE>']
+    name = pic_type
     data = service.get_chip(name).to_dict() if name else {name: chip.to_dict() for name, chip in service.list_chips().items()}
     print(json.dumps(data))
 
 
-@command()
-def hex_info() -> None:
-    pic_type = OPTIONS['<PIC_TYPE>']
-    hex_file_path = Path(OPTIONS['<HEX_FILE>'])
+@app.command('hex_info')
+def hex_info(hex_file_path: Annotated[Path, typer.Argument(help='Intel HEX input file.')],
+             pic_type: Annotated[str, typer.Argument(help='PIC chip type.')]) -> None:
+    """Show firmware memory usage and contents."""
     try:
         service = _service('hex_info')
         flash_data = service.inspect_hex(pic_type, hex_file_path)
@@ -315,9 +252,9 @@ def hex_info() -> None:
     return
 
 
-@command()
-def programmer_info() -> None:
-    port = OPTIONS['--port']
+@app.command('programmer_info')
+def programmer_info(port: Port) -> None:
+    """Print the programmer firmware and protocol versions."""
     try:
         info = _service('programmer_info').programmer_info(port)
         print(f'Firmware version: {info.firmware_version}')
@@ -330,31 +267,36 @@ def programmer_info() -> None:
         print('Please check that device is properly connected and working.')
 
 
-@command()
-def decode_fuses() -> None:
-    print(_service('decode_fuses').decode_fuses(OPTIONS['--pic_type'], [int(value) for value in OPTIONS['<fuses>'].split()]))
-
-
-@command()
-def read_chip_config() -> None:
+@app.command('decode_fuses')
+def decode_fuses(fuses: Annotated[str, typer.Argument(help='Space-separated decimal fuse words (quote multiple words).')], pic_type: ChipType) -> None:
+    """Decode fuse words into named settings."""
     try:
-        _service('read_chip_config').read_config(_target())
+        words = [int(value) for value in fuses.split()]
+    except ValueError as error:
+        msg = 'Fuse words must be decimal integers.'
+        raise typer.BadParameter(msg, param_hint='fuses') from error
+    print(_service('decode_fuses').decode_fuses(pic_type, words))
+
+
+@app.command('read_chip_config')
+def read_chip_config(port: Port, pic_type: ChipType, *, icsp: ICSP = False) -> None:
+    """Read chip identification, calibration, and fuse settings."""
+    try:
+        _service('read_chip_config').read_config(Target(port, pic_type, icsp))
     except OSError:
         _file_error()
 
 
-@command()
-def chipdata_migrate() -> None:
-    PicPro.migrate_chip_data(
-        Path(OPTIONS['<CID_FILE>']) if OPTIONS['<CID_FILE>'] else None,
-        Path(OPTIONS['--output']) if OPTIONS['--output'] else None,
-    )
+@app.command('chipdata_migrate')
+def chipdata_migrate(cid_file: Annotated[Path | None, typer.Argument(help='Legacy CID file; omit to search standard locations.')] = None,
+                     output: Annotated[Path | None, typer.Option('--output', help='Directory for YAML chip definitions.')] = None) -> None:
+    """Convert legacy CID chip definitions to YAML."""
+    PicPro.migrate_chip_data(cid_file, output)
 
 
 def main() -> None:
     signal.signal(signal.SIGINT, lambda _signal, _frame: sys.exit(0))  # Properly handle Control+C
-    if hasattr(command, 'chosen'):
-        command.chosen()  # Execute the function specified by the user.
+    app(prog_name='picpro')
 
 
 if __name__ == '__main__':

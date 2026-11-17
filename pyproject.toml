@@ -24,7 +24,7 @@ classifiers = [
 
 dependencies = [
     "pyserial",
-    "docopt",
+    "typer>=0.15.2",
     "intelhex",
     "pyyaml",
     "platformdirs>=4"

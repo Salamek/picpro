@@ -131,22 +131,34 @@ and replaces YAML files for chips found in the input database.
 
 ## Usage
 
+The CLI uses Typer. Run `picpro --help` to list commands and
+`picpro COMMAND --help` for command-specific arguments and options.
+Existing command names (including underscores) and short options are preserved.
+
 ```text
 Command details:
     program             Program PIC chip.
     verify              Verify PIC flash.
     dump                Dump PIC data as binary.
     erase               Erase PIC.
-    chipinfo            Prints chipinfo as JSON in terminal.
-    hexinfo             Prints information about hexfile.
+    chip_info           Print chip definitions as JSON.
+    programmer_info     Print programmer firmware and protocol versions.
+    read_chip_config    Read chip identification, calibration, and fuses.
+    decode_fuses        Decode fuse words into named settings.
+    chipdata_migrate    Convert legacy CID chip definitions to YAML.
+    hex_info            Print information about a hex file.
 
 Usage:
     picpro program -p PORT -i HEX_FILE -t PIC_TYPE [--id=PIC_ID] [--fuse=FUSE_NAME:FUSE_VALUE...] [--icsp]
     picpro verify -p PORT -i HEX_FILE -t PIC_TYPE [--icsp]
     picpro erase -p PORT -t PIC_TYPE [--icsp]
     picpro dump <mem_type> -p PORT -o HEX_FILE -t PIC_TYPE [--icsp] [--binary]
-    picpro chipinfo [<PIC_TYPE>]
-    picpro hexinfo <HEX_FILE> <PIC_TYPE>
+    picpro chip_info [<PIC_TYPE>]
+    picpro hex_info <HEX_FILE> <PIC_TYPE>
+    picpro programmer_info -p PORT
+    picpro read_chip_config -p PORT -t PIC_TYPE [--icsp]
+    picpro decode_fuses <fuses> -t PIC_TYPE
+    picpro chipdata_migrate [<CID_FILE>] [--output=OUTPUT_DIR]
     picpro (-h | --help)
     picpro (-v | --version)
 

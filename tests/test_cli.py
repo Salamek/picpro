@@ -47,8 +47,8 @@ class CLI:
     output: Path
 
     def run(self, *arguments: str) -> CLIResult:
-        # Exercise the public entry point with fresh argv parsing and command
-        # registration each time, even when another test imported the CLI.
+        # Exercise the public entry point, including Typer argument parsing,
+        # even when another test already imported the CLI.
         package = importlib.import_module('picpro.bin')
         previous_module = sys.modules.pop('picpro.bin.picpro', None)
         previous_attribute = package.__dict__.pop('picpro', None)
@@ -136,7 +136,8 @@ def test_public_module_entry_point(arguments: list[str]) -> None:
     elif arguments == ['--help']:
         assert result.returncode == 0
         assert 'Usage:' in result.stdout
-        assert 'picpro program' in result.stdout
+        assert 'program' in result.stdout
+        assert 'Program a PIC chip' in result.stdout
         assert result.stderr == ''
     else:
         assert result.returncode != 0
@@ -400,3 +401,75 @@ def test_packaged_yaml_cli_works_without_any_bundled_cid(tmp_path: Path) -> None
     assert data['chip_name'] == '12f675'
     assert data['rom_size'] == 2048
     assert data['socket_image'] == 'dip8'
+
+
+@pytest.mark.parametrize('command', [
+    'program', 'verify', 'dump', 'erase', 'chip_info', 'hex_info',
+    'programmer_info', 'decode_fuses', 'read_chip_config', 'chipdata_migrate',
+])
+def test_command_help_does_not_open_hardware(cli: CLI, command: str) -> None:
+    result = cli.run(command, '--help')
+    assert result.code == 0
+    assert f'Usage: picpro {command}' in result.stdout
+    assert '--help' in result.stdout
+    assert result.stderr == ''
+    cli.serial_factory.assert_not_called()
+
+
+@pytest.mark.parametrize('arguments', [
+    [], ['program'], ['dump', 'unknown', '-p', '/dev/fake', '-t', '12f675', '-o', 'unused.hex'],
+    ['program', '-p', '/dev/fake', '-t', '12f675', '-i', 'unused.hex', '--fuse=WDT'],
+    ['program', '-p', '/dev/fake', '-t', '12f675', '-i', 'unused.hex', '--fuse=:Enabled'],
+    ['program', '-p', '/dev/fake', '-t', '12f675', '-i', 'unused.hex', '--fuse=WDT:'],
+    ['decode_fuses', 'not-a-number', '-t', '12f675'], ['chip_info', '--unknown'],
+])
+def test_invalid_arguments_report_usage_without_opening_hardware(cli: CLI, arguments: list[str]) -> None:
+    result = cli.run(*arguments)
+    assert result.code == 2
+    assert 'Usage:' in result.stderr
+    assert 'Traceback' not in result.stderr
+    cli.serial_factory.assert_not_called()
+
+
+def test_long_option_aliases_preserve_program_and_dump_behavior(cli: CLI) -> None:
+    result = cli.run('program', '--port=/dev/fake', '--pic_type=12f675', '--hex_file', str(cli.image))
+    assert result.code == 0
+    assert 'ROM verified.' in result.stdout
+    assert cli.device.work_thread.rom_data == cli.expected.rom_data
+
+
+def test_long_dump_output_alias(cli: CLI) -> None:
+    result = cli.run('dump', 'rom', '--port', '/dev/fake', '--pic_type', '12f675', '--hex_file', str(cli.output), '--binary')
+    assert result.code == 0
+    assert cli.output.read_bytes() == b'\x83\x12' + b'\xff\x3f' * 1022 + b'\x56\x34'
+    assert f'Reading ROM into file {cli.output}...' in result.stdout
+
+
+def test_typer_app_can_be_invoked_repeatedly(cli: CLI) -> None:
+    from typer.testing import CliRunner  # noqa: PLC0415 - test the public Typer app directly
+
+    module = importlib.import_module('picpro.bin.picpro')
+    runner = CliRunner()
+    for chip in ['12f675', '10f200']:
+        result = runner.invoke(module.app, ['chip_info', chip])
+        assert result.exit_code == 0
+        assert json.loads(result.stdout)['chip_name'] == chip
+    result = runner.invoke(module.app, ['-v'])
+    assert result.exit_code == 0
+    assert result.stdout.strip() == __version__
+    cli.serial_factory.assert_not_called()
+
+
+def test_importing_cli_does_not_parse_arguments_or_install_signal_handlers() -> None:
+    code = (
+        "import sys; from unittest.mock import patch; sys.argv = ['gui', '--unknown']; "
+        "\nwith patch('signal.signal') as signal, patch('serial.Serial') as serial:"
+        "\n import picpro.bin.picpro; signal.assert_not_called(); serial.assert_not_called()"
+    )
+    result = subprocess.run(  # noqa: S603 - fixed local executable and controlled test code
+        [sys.executable, '-c', code], cwd=_ROOT,
+        env={**os.environ, 'PYTHONPATH': str(_ROOT)}, capture_output=True, text=True, timeout=10, check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == ''
+    assert result.stderr == ''
