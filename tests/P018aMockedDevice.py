@@ -1,5 +1,5 @@
 import struct
-import time
+import threading
 
 from picpro.ProgrammingVariables import ProgrammingVariables
 from picpro.protocol.ChipConfig import ChipConfig
@@ -20,26 +20,17 @@ class P018aMockedDeviceThread:
         self.rom_data: bytes | None = None
         self.eeprom_data: bytes | None = None
         self.debug_vector: int = 0
+        self.pending_fuses: list[int] | None = None
+        self.current_command: int | None = None
+        # One-shot wire response overrides for exercising host error handling.
+        self.response_overrides: dict[tuple[int, bytes], bytes] = {}
 
     def read(self, count: int = 1, timeout: float | None = 5) -> bytes:
-        # Read bytes from the port.  Stop when the requested number of
-        # bytes have been received, or the timeout has passed.  In order
-        # to sidestep issues with the serial library this is done by
-        # polling the serial port's read() method.
-        result = b''
-        init_time = time.time()
-        end_time = None
-        if timeout is not None:
-            end_time = init_time + timeout
-        while (count > 0) and ((end_time is None) or (time.time() < end_time)):
-            read_result = self.device.input_buffer[:count]
-            self.device.input_buffer =  self.device.input_buffer[count:]
-            count = count - len(read_result)
-            result = result + read_result
-
-        return result
+        return self.device.receive(count, timeout)
 
     def write(self, data: bytes) -> None:
+        if self.current_command is not None:
+            data = self.response_overrides.pop((self.current_command, data), data)
         self.device.mock_send(data)
 
     def _program_rom(self) -> None:
@@ -120,7 +111,8 @@ class P018aMockedDeviceThread:
         is_16bit = self.programing_vars.core_type in (1, 2, 13)
         if is_16bit:
             pic_id = fuse_settings[2:10]
-            fuses = list(struct.unpack('<HHHHHHH', fuse_settings[10:24]))
+            self.pending_fuses = list(struct.unpack('<HHHHHHH', fuse_settings[10:24]))
+            fuses = self.chip_config.fuses if self.chip_config else [0xffff] * 7
         else:
             if fuse_settings[6:10] != b'FFFF' or fuse_settings[12:24] != b'\xff\xff' * 6:
                 self.write(b'N')
@@ -128,15 +120,17 @@ class P018aMockedDeviceThread:
             pic_id = fuse_settings[2:6] + b'\x00' * 4
             fuses = [struct.unpack('<H', fuse_settings[10:12])[0]] + [0] * 6
 
-        self.chip_config = ChipConfig(chip_id=0, id=pic_id, fuses=fuses, calibrate=0)
+        calibration = self.chip_config.calibrate if self.chip_config else 0xffff
+        self.chip_config = ChipConfig(chip_id=0, id=pic_id, fuses=fuses, calibrate=calibration)
         self.write(b'Y')
 
     def _read_config(self) -> None:
-        if not self.programing_vars or not self.is_programming_voltages_on or self.chip_config is None:
+        if not self.programing_vars or not self.is_programming_voltages_on:
             self.write(b'N')
             return
         self.write(b'C')
-        self.write(self.chip_config.to_bytes())
+        config = self.chip_config or ChipConfig(chip_id=0, id=b'\xff' * 8, fuses=[0xffff] * 7, calibrate=0xffff)
+        self.write(config.to_bytes())
 
     def _program_calibration(self) -> None:
         if not self.programing_vars or not self.is_programming_voltages_on:
@@ -148,18 +142,20 @@ class P018aMockedDeviceThread:
             self.chip_config = ChipConfig(chip_id=0, id=b'\x00' * 8, fuses=[0] * 7, calibrate=calibrate)
         else:
             self.chip_config.calibrate = calibrate
+        self.chip_config.fuses[0] = struct.unpack('>H', data[2:4])[0]
         self.write(b'Y')
 
     def _read_rom(self) -> None:
         if not self.programing_vars:
             return
         rom_bytes = self.programing_vars.rom_size_words * 2
-        self.write(self.rom_data if self.rom_data is not None else b'\xff' * rom_bytes)
+        data = self.rom_data or b''
+        self.write(data + self.blank_rom_word * ((rom_bytes - len(data)) // 2))
 
     def _read_eeprom(self) -> None:
         if not self.programing_vars:
             return
-        self.write(self.eeprom_data if self.eeprom_data is not None else b'\xff' * self.programing_vars.eeprom_size)
+        self.write((self.eeprom_data or b'').ljust(self.programing_vars.eeprom_size, b'\xff'))
 
     def _erase_chip(self) -> None:
         if not self.programing_vars or not self.is_programming_voltages_on:
@@ -168,25 +164,37 @@ class P018aMockedDeviceThread:
         self.rom_data = None
         self.eeprom_data = None
         self.chip_config = None
+        self.pending_fuses = None
         self.write(b'Y')
 
     def _rom_is_blank(self) -> None:
-        self.read(1)  # consume high_byte
-        self.write(b'Y' if self.rom_data is None else b'N')
+        high_byte = self.read(1)
+        if high_byte != self.blank_rom_word[:1]:
+            self.write(b'B')
+            return
+        assert self.programing_vars is not None
+        self.write(b'\xff' * ((self.programing_vars.rom_size_words - 1) // 256))
+        data = self.rom_data or b''
+        self.write(b'Y' if data == self.blank_rom_word * (len(data) // 2) else b'N')
 
     def _eeprom_is_blank(self) -> None:
-        self.write(b'Y' if self.eeprom_data is None else b'N')
+        data = self.eeprom_data or b''
+        self.write(b'Y' if data == b'\xff' * len(data) else b'N')
 
     def _program_18fxxxx_fuse(self) -> None:
         if not self.programing_vars or not self.is_programming_voltages_on:
             self.write(b'N')
             return
         data = self.read(24)
+        if self.programing_vars.core_type not in (1, 2, 13) or self.pending_fuses is None:
+            self.write(b'B')
+            return
         fuses = list(struct.unpack('<HHHHHHH', data[10:24]))
         if self.chip_config is None:
             self.chip_config = ChipConfig(chip_id=0, id=b'\x00' * 8, fuses=fuses, calibrate=0)
         else:
             self.chip_config.fuses = fuses
+        self.pending_fuses = None
         self.write(b'Y')
 
     def _program_debug_vector(self) -> None:
@@ -195,11 +203,21 @@ class P018aMockedDeviceThread:
         self.write(b'Y')
 
     def _read_debug_vector(self) -> None:
-        self.write(struct.pack('>I', self.debug_vector))
+        self.write(b'\xef' + self.debug_vector.to_bytes(3, 'big'))
+
+    @property
+    def blank_rom_word(self) -> bytes:
+        assert self.programing_vars is not None
+        core = self.programing_vars.core_type
+        bits = 16 if core in (1, 2, 13) else 12 if core in (4, 11) else 14
+        return ((1 << bits) - 1).to_bytes(2, 'big')
 
     def listen_for_commands(self) -> None:  # noqa: PLR0912
         while self.device.is_open:
             data = self.read()
+            if not data:
+                continue
+            self.current_command = data[0] if self.in_jump_table else None
             if self.in_jump_table:
                 # In jump table
                 if data == b'\x01':
@@ -224,7 +242,7 @@ class P018aMockedDeviceThread:
                     self.is_programming_voltages_on = False
                     self.write(b'v')
                 elif data == b'\x06':
-                    self.is_programming_voltages_on = not self.is_programming_voltages_on
+                    self.is_programming_voltages_on = True
                     self.write(b'V')
                 elif data == b'\x07':
                     self._program_rom()
@@ -251,8 +269,8 @@ class P018aMockedDeviceThread:
                 elif data in [b'\x12', b'\x13']:
                     # wait_until_chip_in_socket/ wait_until_chip_out_of_socket
                     self.write(b'A')
-                    time.sleep(1)  # Simulte user manual action taking time
                     self.write(b'Y')
+                    self.in_jump_table = False
                 elif data == b'\x14':
                     # programmer_version
                     self.write(b'\x03')
@@ -285,6 +303,7 @@ class P018aMockedDevice:
     """Mocked serial device that simulates RS232 behavior."""
 
     def __init__(self) -> None:
+        self.condition = threading.Condition()
         self.input_buffer = b''
         self.output_buffer = b''
         self.is_open = True
@@ -303,27 +322,50 @@ class P018aMockedDevice:
 
     def write(self, data: bytes) -> None:
         """Simulate writing data to the serial port."""
-        self.input_buffer += data
+        with self.condition:
+            self.input_buffer += data
+            self.condition.notify_all()
 
     def read(self, length: int = 1) -> bytes:
         """Simulate reading a line from the serial port."""
-        requested_data = self.output_buffer[:length]
-        self.output_buffer = self.output_buffer[length:]
-        return requested_data
+        with self.condition:
+            self.condition.wait_for(lambda: bool(self.output_buffer) or not self.is_open, timeout=0.1)
+            requested_data = self.output_buffer[:length]
+            self.output_buffer = self.output_buffer[length:]
+            return requested_data
+
+    def receive(self, count: int, timeout: float | None) -> bytes:
+        with self.condition:
+            self.condition.wait_for(lambda: len(self.input_buffer) >= count or not self.is_open, timeout=timeout)
+            data = self.input_buffer[:count]
+            self.input_buffer = self.input_buffer[count:]
+            return data
 
     def close(self) -> None:
         """Simulate closing the serial port."""
-        self.is_open = False
+        with self.condition:
+            self.is_open = False
+            self.condition.notify_all()
 
     def mock_send(self, data: bytes) -> None:
         """Simulate the device sending data to the serial port."""
-        self.output_buffer += data
+        with self.condition:
+            self.output_buffer += data
+            self.condition.notify_all()
 
     def reset_input_buffer(self) -> None:
-        self.input_buffer = b''
+        with self.condition:
+            self.output_buffer = b''
+
+    def flushInput(self) -> None:  # noqa: N802 - pyserial compatibility
+        self.reset_input_buffer()
 
     def _reset(self) -> None:
-        self.output_buffer = b''
-        self.input_buffer = b''
-        # Device sends its version on device reset
-        self.output_buffer += b'B3'
+        with self.condition:
+            self.output_buffer = b''
+            self.input_buffer = b''
+            self.work_thread.in_jump_table = False
+            self.work_thread.is_programming_voltages_on = False
+            self.work_thread.programing_vars = None
+            self.work_thread.pending_fuses = None
+            self.mock_send(b'B\x03')
