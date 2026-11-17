@@ -77,6 +77,7 @@ OPTIONS = docopt(__doc__)
 CT = TypeVar('CT')
 
 if OPTIONS['--version']:
+    print(app_root.__version__)
     sys.exit(0)
 
 
