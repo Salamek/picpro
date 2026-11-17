@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import serial
+from intelhex import IntelHex
 
 from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.exceptions import InvalidResponseError, InvalidValueError
@@ -388,3 +389,13 @@ def test_id_fuse_status_bytes(mock_programming_interface: IProgrammingInterface,
         with pytest.raises(InvalidResponseError):
             mock_programming_interface.program_id_fuses(b'1234', [0x31ff])
     assert not mock_serial_device.work_thread.response_overrides
+
+
+def test_program_eeprom_from_word_encoded_hex(mock_programming_interface: IProgrammingInterface) -> None:
+    image = IntelHex()
+    image.frombytes(b'\x11\x00\x22\x00', offset=0x4200)
+    data = FlashData(mock_programming_interface.chip_info, image)
+    expected = b'\x11\x22' + b'\xff' * (mock_programming_interface.chip_info.eeprom_size - 2)
+    assert data.eeprom_data == expected
+    mock_programming_interface.program_eeprom(data.eeprom_data)
+    assert mock_programming_interface.read_eeprom() == expected

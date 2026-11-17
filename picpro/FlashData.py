@@ -51,15 +51,13 @@ class FlashData:
         self.calibration_word = None
         self.id_buffer = None
 
-        self._fuse_data_blank = b''.join(struct.pack('>H', word) for word in self.chip_info.fuse_blank)
-
         # Set memory map based on PIC architecture family
         # ROM region is always dynamic based on actual chip ROM size
         if self.chip_info.core_bits == 16:
-            # 16-bit Baseline family
+            # PIC18 EEPROM stores packed bytes at 0xf00000.
             self._memory_mapping = MemoryMapping(
                 rom=MemoryRegion(0x0000, self.chip_info.rom_size),  # Was hardcoded to 0x8000
-                eeprom=MemoryRegion(0xf000, 0xf100),
+                eeprom=MemoryRegion(0xf00000, 0xf00000 + self.chip_info.eeprom_size),
                 config=MemoryRegion(0x300000, 0x30000e),
                 id=MemoryRegion(0x200000, 0x200010),
             )
@@ -70,20 +68,20 @@ class FlashData:
             self._memory_mapping = MemoryMapping(
                 rom=MemoryRegion(0x0000, self.chip_info.rom_size),
                 config=MemoryRegion(self.chip_info.rom_size, 0x2000),  # Scan after ROM up to 0x2000
-                eeprom=MemoryRegion(0x2100 * 2, 0x2100 * 2 + max(self.chip_info.eeprom_size, 256)),  # 0x4200+
+                eeprom=MemoryRegion(0x4200, 0x4200 + self.chip_info.eeprom_size * 2),
             )
         else:  # core_bits == 14
             # 14-bit Midrange family (12F6xx, 16Fxxx)
             # Standard locations: Config at 0x2007 (byte 0x400E), User ID at 0x2000-0x2003, EEPROM at 0x2100+
             self._memory_mapping = MemoryMapping(
                 rom=MemoryRegion(0x0000, self.chip_info.rom_size),  # Was hardcoded to 0x4000
-                config=MemoryRegion(0x4000, 0x4010),  # Includes User ID (0x4000-0x4007) and Config (0x400E)
-                eeprom=MemoryRegion(0x4200, 0x4200 + max(self.chip_info.eeprom_size, 256)),  # Was hardcoded to 0xffff
+                config=MemoryRegion(0x4000, max(0x4010, 0x400e + 2 * len(self.chip_info.fuse_blank))),  # Includes User ID (0x4000-0x4007) and Config (0x400E)
+                eeprom=MemoryRegion(0x4200, 0x4200 + self.chip_info.eeprom_size * 2),
             )
 
         self.process()
 
-    def _tobinarray_really(self, start: int, end: int, pad_callback: Callable[[int, int], int], max_size: int | None = None) -> PaddedBuffer:
+    def _tobinarray_really(self, start: int, end: int, pad_callback: Callable[[int, int], int]) -> PaddedBuffer:
         """Return binary array."""
         buf = bytearray()
         raw_size = 0
@@ -92,12 +90,7 @@ class FlashData:
             if found is not None:
                 raw_size += 1
 
-            if max_size is not None and found and index > max_size:
-                msg = 'Range contains data over expected max_size'
-                raise ValueError(msg)
-
-            if max_size is None or index < max_size:
-                buf.append(found if found is not None else pad_callback(address, index))
+            buf.append(found if found is not None else pad_callback(address, index))
 
         result_len = len(buf)
         if result_len % 2 != 0:
@@ -111,19 +104,19 @@ class FlashData:
             size=result_len,
         )
 
-    def _filter_records(self) -> None:
-        rom_blank_word = struct.pack('<H', self.chip_info.rom_blank_word)
+    def _filter_records(self, *, little_endian: bool) -> None:
+        word_format = '<H' if little_endian else '>H'
+        rom_blank_word = struct.pack(word_format, self.chip_info.rom_blank_word)
+        self._fuse_data_blank = b''.join(struct.pack(word_format, word) for word in self.chip_info.fuse_blank)
         self.rom_buffer = self._tobinarray_really(
             start=self._memory_mapping.rom.start,
             end=self._memory_mapping.rom.end,
-            max_size=self.chip_info.rom_size, # Makes _tobinarray_really to rise ValueError if there are data in given range over expected size of chip
             pad_callback=lambda _adr, i: rom_blank_word[i % 2],  # LoL, i % 2 returns 1/0 and rom_blank_word are two bytes with index 0 and 1 ;)
         )
 
         self.eeprom_buffer = self._tobinarray_really(
             start=self._memory_mapping.eeprom.start,
             end=self._memory_mapping.eeprom.end,
-            max_size=self.chip_info.eeprom_size,
             pad_callback=lambda _adr, _i: 0x0FF,
         )
 
@@ -142,7 +135,7 @@ class FlashData:
         else:
             self.fuse_buffer = self._tobinarray_really(
                 start=0x400e,
-                end=0x4010,
+                end=0x400e + len(self._fuse_data_blank),
                 pad_callback=lambda _adr, i: self._fuse_data_blank[i],
             )
 
@@ -157,32 +150,80 @@ class FlashData:
         if self.chip_info.core_bits == 16:
             return True
 
-        for x in range(0, self.rom_buffer.size, 2):
-            if (x + 2) < self.rom_buffer.size:
-                be_word, = struct.unpack('>H', self.rom_buffer.data[x:x + 2])
-                le_word, = struct.unpack('<H', self.rom_buffer.data[x:x + 2])
-                be_ok = (be_word & self.chip_info.rom_blank_word) == be_word
-                le_ok = (le_word & self.chip_info.rom_blank_word) == le_word
-                if be_ok and not le_ok:
-                    return False
-                if le_ok and not be_ok:
-                    return True
-                if not (le_ok or be_ok):
-                    msg = 'Invalid ROM word.'
-                    raise ValueError(msg)
-        return False
+        # Infer byte order from supplied ROM bytes, never from padding.
+        # Keep both candidates until all words have been validated; an early
+        # decisive word must not hide invalid data later in the image.
+        blank = self.chip_info.rom_blank_word
+        be_ok = le_ok = True
+        for address in range(self._memory_mapping.rom.start, self._memory_mapping.rom.end - 1, 2):
+            first = self.hex_file._buf.get(address)  # noqa: SLF001
+            second = self.hex_file._buf.get(address + 1)  # noqa: SLF001
+            if first is None and second is None:
+                continue
+            be_word = ((first if first is not None else blank >> 8) << 8) | (second if second is not None else blank & 0xff)
+            le_word = (first if first is not None else blank & 0xff) | ((second if second is not None else blank >> 8) << 8)
+            be_ok = be_ok and (be_word & blank) == be_word
+            le_ok = le_ok and (le_word & blank) == le_word
+            if not (le_ok or be_ok):
+                msg = 'Invalid ROM word.'
+                raise ValueError(msg)
+        # Default to little endian for ambiguous PIC HEX images.
+        return le_ok
+
+    def _validate_memory_sizes(self) -> None:
+        # Bytes after ROM and before the next mapped region cannot belong to
+        # this chip. Baseline chips may put user IDs immediately after ROM.
+        region_starts = [self._memory_mapping.config.start, self._memory_mapping.eeprom.start]
+        if self._memory_mapping.id is not None:
+            region_starts.append(self._memory_mapping.id.start)
+        rom_end = self._memory_mapping.rom.end
+        rom_area_end = min((start for start in region_starts if start >= rom_end), default=rom_end)
+        for address in self.hex_file.addresses():
+            if rom_end <= address < rom_area_end:
+                msg = f'ROM data at {address:#x} exceeds chip ROM size {rom_end} bytes.'
+                raise ValueError(msg)
+            if address >= self._memory_mapping.eeprom.end:
+                msg = f'EEPROM data at {address:#x} exceeds chip EEPROM size {self.chip_info.eeprom_size} bytes.'
+                raise ValueError(msg)
+
+    def _unpack_eeprom_words(self, *, little_endian: bool) -> None:
+        """Collapse midrange EEPROM words to one data byte each.
+
+        INHX32 stores 12/14-bit EEPROM as one payload byte per 16-bit word.
+        Little-endian files keep that byte first; big-endian files keep it second.
+        """
+        pick = 0 if little_endian else 1
+        words = self.eeprom_buffer.data
+        data = bytearray()
+        raw_size = 0
+        start = self._memory_mapping.eeprom.start
+        for index in range(pick, len(words), 2):
+            data.append(words[index])
+            if self.hex_file._buf.get(start + index) is not None:  # noqa: SLF001
+                raw_size += 1
+
+        unpacked = bytes(data)
+        self.eeprom_buffer = PaddedBuffer(
+            data=unpacked,
+            raw_size=raw_size,
+            padding_size=len(unpacked) - raw_size,
+            size=len(unpacked),
+        )
 
     def process(self) -> None:
-        self._filter_records()
+        self._validate_memory_sizes()
         is_swap_bytes = self._is_little_endian()
+        self._filter_records(little_endian=is_swap_bytes)
 
         if is_swap_bytes:
             self.rom_buffer.swab_bytes()
             self.config_buffer.swab_bytes()
-            self.eeprom_buffer.swab_bytes()
             self.fuse_buffer.swab_bytes()
             if self.id_buffer:
                 self.id_buffer.swab_bytes()
+
+        if self.chip_info.core_bits != 16:
+            self._unpack_eeprom_words(little_endian=is_swap_bytes)
 
         # check Fuses
         if self.fuses:
@@ -193,6 +234,9 @@ class FlashData:
             msg = 'This chip does not have calibration in ROM data'
             raise ValueError(msg)
 
+        if calibration_word is not None and len(calibration_word) != 2:
+            msg = 'Calibration word must contain exactly 2 bytes.'
+            raise ValueError(msg)
         self.calibration_word = calibration_word
 
     @property
