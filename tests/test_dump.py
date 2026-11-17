@@ -18,7 +18,7 @@ def test_dump_byte_order(tmp_path: Path, chip_data_path: Path, monkeypatch: pyte
     output = tmp_path / ('dump.bin' if binary else 'dump.hex')
     monkeypatch.setattr(cli, 'OPTIONS', {
         '<mem_type>': memory, '--hex_file': str(output), '--pic_type': '12f675',
-        '--port': '/dev/fake', '--binary': binary,
+        '--port': '/dev/fake', '--binary': binary, '--icsp': False,
     })
     monkeypatch.setattr(cli, '_find_chip_data', lambda: chip_data_path)
     factory = MagicMock(spec=cli.Connection)

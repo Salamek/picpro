@@ -234,7 +234,8 @@ def program() -> None:
                     print('Programming ID and fuses.')
                     fuse_transaction = programming_interface.program_id_fuses(flash_data.id_data, flash_data.fuse_data)
 
-                    _verify_pipeline(programming_interface, chip_info_entry, flash_data)
+                    if not _verify_pipeline(programming_interface, chip_info_entry, flash_data):
+                        sys.exit(1)
                     if fuse_transaction:
                         print('Committing 18Fxxxx fuse data.')
                         fuse_transaction.program_18fxxxx_fuse(flash_data.fuse_data)
@@ -267,7 +268,8 @@ def verify() -> None:
                     print('CAL is in ROM data, patching ROM to contain the same CAL data...')
                     flash_data.set_calibration_word(chip_config.calibrate.to_bytes(2, 'big'))
 
-                _verify_pipeline(programming_interface, chip_info_entry, flash_data)
+                if not _verify_pipeline(programming_interface, chip_info_entry, flash_data):
+                    sys.exit(1)
                 print('Done!')
     except OSError:
         print('Unable to locate chipinfo.cid file.')
@@ -285,7 +287,7 @@ def dump() -> None:
         print('Opening connection to programmer...')
         with Connection(OPTIONS['--port']) as connection:
             print('Initializing programming interface...')
-            with connection.get_programming_interface(chip_info_entry) as programming_interface:
+            with connection.get_programming_interface(chip_info_entry, icsp_mode=OPTIONS['--icsp']) as programming_interface:
                 if mem_type == 'eeprom':
                     if not chip_info_entry.has_eeprom:
                         print('This chip has no EEPROM!')
@@ -327,7 +329,7 @@ def erase() -> None:
         print('Opening connection to programmer...')
         with Connection(OPTIONS['--port']) as connection:
             print('Initializing programming interface...')
-            with connection.get_programming_interface(chip_info_entry) as programming_interface:
+            with connection.get_programming_interface(chip_info_entry, icsp_mode=OPTIONS['--icsp']) as programming_interface:
                 print('Erasing chip...')
                 programming_interface.erase_chip()
                 print('Done!')
