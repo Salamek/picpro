@@ -31,7 +31,11 @@ class IConnection:
             msg = f'Unable to open serial port "{port}".'
             raise ConnectionError(msg) from e
 
-        self.reset()
+        try:
+            self.reset()
+        except BaseException:
+            self.serial_connection.close()
+            raise
 
     def read(self, count: int = 1, timeout: float | None = 5) -> bytes:
         # Read bytes from the port.  Stop when the requested number of
@@ -73,8 +77,7 @@ class IConnection:
 
         # Check for acknowledgement
         ack = self.read(1)
-        result = ResponseEnum(ack) == ResponseEnum.AT_COMMAND_JUMP_TABLE
-        if not result:
+        if ack != ResponseEnum.AT_COMMAND_JUMP_TABLE.value:
             msg = 'No acknowledgement for command start.'
             raise InvalidResponseError(msg)
 
@@ -86,14 +89,13 @@ class IConnection:
         cmd = b'\x01'
         self.serial_connection.write(cmd)
         ack = self.read(1, timeout=10)
-        result = ResponseEnum(ack) == ResponseEnum.WAITING_FOR_COMMAND
-        if not result:
+        if ack != ResponseEnum.WAITING_FOR_COMMAND.value:
             if ack:
                 msg = f'Unexpected response ("{ack!r}") in command end.'
                 raise InvalidResponseError(msg)
             msg = 'No acknowledgement for command end.'
             raise InvalidResponseError(msg)
-        return result
+        return True
 
     def reset(self) -> bool:
         """Resets the PIC Programmer's on-board controller."""
@@ -113,18 +115,12 @@ class IConnection:
             time.sleep(.1)
             response = self.read(2, timeout=.3)
 
-        if len(response) > 1:
-            response_header = HeaderEnum(response[0].to_bytes(1, 'little'))
-            result = response_header == HeaderEnum.PROGRAMMER_VERSION
-        else:
-            result = False
+        if len(response) != 2 or response[:1] != HeaderEnum.PROGRAMMER_VERSION.value:
+            msg = f'Invalid programmer version response during reset: {response!r}.'
+            raise InvalidResponseError(msg)
 
-        if not result:
-            raise InvalidResponseError
-
-        if len(response) == 2:
-            self.detected_programmer_version = response[1]
-        return result
+        self.detected_programmer_version = response[1]
+        return True
 
     def echo(self, msg: bytes = b'X') -> bytes:
         """Instructs the PIC programmer to echo back the message
