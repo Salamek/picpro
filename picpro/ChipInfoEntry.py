@@ -22,7 +22,7 @@ class ChipInfoEntry:
     program_tries: int
     over_program: int
     core_type: str
-    rom_size: int  # n of words (byte*2)
+    rom_size: int  # n of bytes
     eeprom_size: int  # n of bytes
     fuse_blank: list
     cp_warn: bool
@@ -204,9 +204,11 @@ class ChipInfoEntry:
             for setting in fuse_settings:
                 setting_value = fuse_settings[setting]
 
-                if indexwise_and(fuse_values, setting_value) == fuse_values and indexwise_and(best_value, setting_value) != best_value:
-                    # If this setting value clears more bits than
-                    # best_value, it's our new best value.
+                if indexwise_and(fuse_values, setting_value) == fuse_values and (
+                    not fuse_identified or indexwise_and(best_value, setting_value) != best_value
+                ):
+                    # Accept the first match, including an all-ones default.
+                    # Later matches replace it when they clear more bits.
                     best_value = indexwise_and(best_value, setting_value)
                     result[fuse_param] = setting
                     fuse_identified = True
