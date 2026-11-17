@@ -1,0 +1,196 @@
+chip_name: 18f4321
+include: true
+socket_image: dip28
+erase_mode: 4
+flash_chip: true
+power_sequence: VccVpp1
+program_delay: 10
+program_tries: 1
+over_program: 0
+core_type: bit16_b
+rom_size: 8192
+eeprom_size: 256
+cp_warn: false
+cal_word: false
+band_gap: false
+icsp_only: false
+chip_id: 0x2100
+fuses_blank:
+  0: 0xcf00
+  1: 0x1f1f
+  2: 0x8700
+  3: 0xc5
+  4: 0xc003
+  5: 0xe003
+  6: 0x4003
+fuses:
+  IE Switchover:
+    Enabled:
+      0: 65535
+    Disabled:
+      0: 32767
+  Fail Safe Clock Mon:
+    Enabled:
+      0: 65535
+    Disabled:
+      0: 49151
+  Oscillator:
+    ExRC OSC1 CO OSC2:
+      0: 65535
+    IRC O1RA7 CO OSC2:
+      0: 63999
+    IRC O1RA7 O2RA6:
+      0: 63743
+    ExRC OSC2 RA6:
+      0: 63487
+    HS+PLL:
+      0: 63231
+    ExOSC1 CO RA6:
+      0: 62975
+    ExOSC1 CO OSC2:
+      0: 62719
+    HS:
+      0: 62207
+    XT:
+      0: 61951
+    LP:
+      0: 61695
+  Brownout Voltage:
+    2.0V:
+      1: 65535
+    2.7V:
+      1: 65531
+    4.2V:
+      1: 65527
+    4.5V:
+      1: 65523
+  Brownout Detect:
+    Enabled:
+      1: 65535
+    Disabled:
+      1: 65533
+  Powerup Timer:
+    Disabled:
+      1: 65535
+    Enabled:
+      1: 65534
+  Watchdog Timer:
+    Enabled:
+      1: 65535
+    Disabled:
+      1: 65279
+  Watchdog Postscale:
+    1:32768:
+      1: 65535
+    1:16384:
+      1: 65279
+    1:8192:
+      1: 65023
+    1:4096:
+      1: 64767
+    1:2048:
+      1: 64511
+    1:1024:
+      1: 64255
+    1:512:
+      1: 63999
+    1:256:
+      1: 63743
+    1:128:
+      1: 63487
+    1:64:
+      1: 63231
+    '1:32':
+      1: 62975
+    '1:16':
+      1: 62719
+    '1:8':
+      1: 62463
+    '1:4':
+      1: 62207
+    '1:2':
+      1: 61951
+    '1:1':
+      1: 61695
+  CCP2 Mux:
+    Enabled:
+      2: 65535
+    Disabled:
+      2: 65279
+  PORTB AD Enable:
+    Enabled:
+      2: 65535
+    Disabled:
+      2: 65023
+  MCLRE:
+    Enabled:
+      2: 65535
+    Disabled:
+      2: 32767
+  BBSIZ:
+    1K words:
+      3: 65535
+    512 words:
+      3: 65023
+    256 words:
+      3: 64767
+  Background Debug:
+    Disabled:
+      3: 65535
+    Enabled:
+      3: 65407
+  Low Voltage Program:
+    Enabled:
+      3: 65535
+    Disabled:
+      3: 65531
+  Stack Overflow Reset:
+    Enabled:
+      3: 65535
+    Disabled:
+      3: 65534
+  BOOT ROM Protect:
+    0000-BBSIZ Disabled:
+      4: 65535
+    0000-BBSIZ Enabled:
+      4: 49151
+  ROM Protect:
+    1000-1FFF Disabled:
+      4: 65535
+    1000-1FFF Enabled:
+      4: 65533
+  EEPROM Protect:
+    Disabled:
+      4: 65535
+    Enabled:
+      4: 32767
+  BOOT Table Write Protect:
+    0000-BBSIZ Disabled:
+      5: 65535
+    0000-BBSIZ Enabled:
+      5: 49151
+  ROM Table Write Protect:
+    1000-1FFF Disabled:
+      5: 65535
+    1000-1FFF Enabled:
+      5: 65533
+  EEPROM Table Write Protect:
+    Disabled:
+      5: 65535
+    Enabled:
+      5: 32767
+  CONFIG Table Write Protect:
+    Disabled:
+      5: 65535
+    Enabled:
+      5: 57343
+  BOOT Table Read Protect:
+    0000-BBSIZ Disabled:
+      6: 65535
+    0000-BBSIZ Enabled:
+      6: 49151
+  ROM Table Read Protect:
+    1000-1FFF Disabled:
+      6: 65535
+    1000-1FFF Enabled:
+      6: 65533

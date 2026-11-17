@@ -385,10 +385,8 @@ def hex_info() -> None:
         return
 
 
-    word_count_rom = flash_data.rom_buffer.raw_size // 2
-    word_count_eeprom = flash_data.eeprom_buffer.raw_size
-    print(f'ROM {word_count_rom} words used, {chip_info_entry.rom_size - word_count_rom} words free on chip.')
-    print(f'EEPROM {word_count_eeprom} bytes used, {chip_info_entry.eeprom_size - word_count_eeprom} bytes free on chip.')
+    print(f'ROM {flash_data.rom_buffer.raw_size} bytes used, {chip_info_entry.rom_size - flash_data.rom_buffer.raw_size} bytes free on chip.')
+    print(f'EEPROM {flash_data.eeprom_buffer.raw_size} bytes used, {chip_info_entry.eeprom_size - flash_data.eeprom_buffer.raw_size} bytes free on chip.')
 
     indent_char = '  '
     in_list_char = '- '
@@ -468,7 +466,8 @@ def read_chip_config() -> None:
 @command()
 def chipdata_migrate() -> None:
     chip_info_reader = ChipInfoReader(_find_chip_data())
-    output_dir = Path('./usr/share/picpro/chip-data.d')
+
+    output_dir = Path('./picpro/data/chip-data.d')
 
     def hex_string_representer(dumper: yaml.Dumper, data: str) -> ScalarNode:
         if isinstance(data, str) and data.startswith('0x'):
@@ -496,9 +495,7 @@ def chipdata_migrate() -> None:
             data['chip_id'] = hex(chip_entry.chip_id)
             data['core_type'] = chip_entry.core_type.lower()
             data['chip_name'] = chip_name_lower
-            data['socket_image'] = socket_image_to_dip[chip_entry.socket_image] if not chip_entry.icsp_only else None
-            data['rom_size_words'] = data['rom_size']  # @TODO remove?
-            data['rom_size'] = data['rom_size'] * 2 # Conver to bytes from words
+            data['socket_image'] = socket_image_to_dip[chip_entry.socket_image] if not chip_entry.icsp_only and chip_entry.socket_image else None
 
             fuse_blank = {}
             for index, fuse in enumerate(chip_entry.fuse_blank):

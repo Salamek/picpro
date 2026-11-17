@@ -60,6 +60,7 @@ include = ["picpro*"]
 [tool.setuptools.package-data]
 "picpro" = [
     "data/*",
+    "data/chip-data.d/*.yml",
 ]
 
 [project.scripts]

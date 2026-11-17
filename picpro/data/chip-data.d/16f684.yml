@@ -1,0 +1,81 @@
+chip_name: 16f684
+include: true
+socket_image: dip14
+erase_mode: 2
+flash_chip: true
+power_sequence: Vpp2Vcc
+program_delay: 60
+program_tries: 1
+over_program: 0
+core_type: bit14_b
+rom_size: 4096
+eeprom_size: 256
+cp_warn: false
+cal_word: false
+band_gap: false
+icsp_only: false
+chip_id: 0x1080
+fuses_blank:
+  0: 0x3fff
+fuses:
+  WDT:
+    Enabled:
+      0: 16383
+    Disabled:
+      0: 16375
+  PWRTE:
+    Disabled:
+      0: 16383
+    Enabled:
+      0: 16367
+  MCLRE:
+    Enabled:
+      0: 16383
+    Disabled:
+      0: 16351
+  Code Protect:
+    Disabled:
+      0: 16383
+    Enabled:
+      0: 16319
+  CPD:
+    Disabled:
+      0: 16383
+    Enabled:
+      0: 16255
+  BODEN:
+    BODon SBODENoff:
+      0: 16383
+    BODrun SBODENoff:
+      0: 16127
+    SBODEN=PCON:
+      0: 15871
+    BODoff SBODENoff:
+      0: 15615
+  InEx Switch Over:
+    Enabled:
+      0: 16383
+    Disabled:
+      0: 15359
+  Fail Clock Mon:
+    Enabled:
+      0: 16383
+    Disabled:
+      0: 14335
+  Oscillator:
+    EXTRC_CLKOUT:
+      0: 16383
+    EXTRC_IO:
+      0: 16382
+    INTRC_CLKOUT:
+      0: 16381
+    INTRC_IO:
+      0: 16380
+    EC:
+      0: 16367
+    HS:
+      0: 16366
+    XT:
+      0: 16365
+    LP:
+      0: 16364

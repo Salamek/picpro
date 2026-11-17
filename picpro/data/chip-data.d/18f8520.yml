@@ -1,0 +1,173 @@
+chip_name: 18f8520
+include: true
+socket_image: null
+erase_mode: 4
+flash_chip: true
+power_sequence: VccVpp1
+program_delay: 10
+program_tries: 1
+over_program: 0
+core_type: bit16_b
+rom_size: 32768
+eeprom_size: 256
+cp_warn: false
+cal_word: false
+band_gap: false
+icsp_only: true
+chip_id: 0xb00
+fuses_blank:
+  0: 0x2700
+  1: 0xf0f
+  2: 0x383
+  3: 0x85
+  4: 0xc0ff
+  5: 0xe0ff
+  6: 0x40ff
+fuses:
+  Oscillator Enable:
+    Disabled:
+      0: 65535
+    Enabled:
+      0: 57343
+  Oscillator:
+    RCO2RA6:
+      0: 65535
+    HSPLL:
+      0: 65279
+    ECO2RA6:
+      0: 65023
+    ECO2 CLK Out:
+      0: 64767
+    RC:
+      0: 64511
+    HS:
+      0: 64255
+    XT:
+      0: 63999
+    LP:
+      0: 63743
+  Brownout Voltage:
+    2.0V:
+      1: 65535
+    2.7V:
+      1: 65531
+    4.2V:
+      1: 65527
+    4.5V:
+      1: 65523
+  Brownout Detect:
+    Enabled:
+      1: 65535
+    Disabled:
+      1: 65533
+  Powerup Timer:
+    Disabled:
+      1: 65535
+    Enabled:
+      1: 65534
+  Watchdog Postscale:
+    1:128:
+      1: 65535
+    1:64:
+      1: 65023
+    '1:32':
+      1: 64511
+    '1:16':
+      1: 63999
+    '1:8':
+      1: 63487
+    '1:4':
+      1: 62975
+    '1:2':
+      1: 62463
+    '1:1':
+      1: 61951
+  Watchdog Timer:
+    Enabled:
+      1: 65535
+    Disabled:
+      1: 65279
+  WAIT:
+    Disabled:
+      2: 65535
+    MEMCON:
+      2: 65407
+  T1OSCMX:
+    Legacy Timer1:
+      2: 65535
+    Low Power:
+      2: 65023
+  CCP2 Mux:
+    Enabled:
+      2: 65535
+    Disabled:
+      2: 65279
+  PM1:0:
+    MicroController:
+      2: 65535
+    Microprocessor:
+      2: 65534
+    uProcessor with Boot:
+      2: 65533
+    Extend uProcessor:
+      2: 65532
+  Background Debug:
+    Disabled:
+      3: 65535
+    Enabled:
+      3: 65407
+  Low Voltage Program:
+    Enabled:
+      3: 65535
+    Disabled:
+      3: 65531
+  Stack Overflow Reset:
+    Enabled:
+      3: 65535
+    Disabled:
+      3: 65534
+  BOOT ROM Protect:
+    0000-01FF Disabled:
+      4: 65535
+    0000-01FF Enabled:
+      4: 49151
+  ROM Protect:
+    6000-7FFF Disabled:
+      4: 65535
+    6000-7FFF Enabled:
+      4: 65527
+  EEPROM Protect:
+    Disabled:
+      4: 65535
+    Enabled:
+      4: 32767
+  BOOT Table Write Protect:
+    0000-01FF Disabled:
+      5: 65535
+    0000-01FF Enabled:
+      5: 49151
+  ROM Table Write Protect:
+    6000-7FFF Disabled:
+      5: 65535
+    6000-7FFF Enabled:
+      5: 65527
+  EEPROM Table Write Protect:
+    Disabled:
+      5: 65535
+    Enabled:
+      5: 32767
+  CONFIG Table Write Protect:
+    Disabled:
+      5: 65535
+    Enabled:
+      5: 57343
+  BOOT Table Read Protect:
+    0000-01FF Disabled:
+      6: 65535
+    0000-01FF Enabled:
+      6: 49151
+  ROM Table Read Protect:
+    6000-7FFF Disabled:
+      6: 65535
+    6000-7FFF Enabled:
+      6: 65527

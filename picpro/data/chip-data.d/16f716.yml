@@ -1,0 +1,54 @@
+chip_name: 16f716
+include: true
+socket_image: dip18
+erase_mode: 1
+flash_chip: true
+power_sequence: VccVpp2
+program_delay: 20
+program_tries: 1
+over_program: 0
+core_type: bit14_b
+rom_size: 4096
+eeprom_size: 0
+cp_warn: false
+cal_word: false
+band_gap: false
+icsp_only: false
+chip_id: 0x1140
+fuses_blank:
+  0: 0x3fff
+fuses:
+  WDT:
+    'ON':
+      0: 16383
+    'OFF':
+      0: 16379
+  PWRTE:
+    'OFF':
+      0: 16383
+    'ON':
+      0: 16375
+  BOREN:
+    'ON':
+      0: 16383
+    'OFF':
+      0: 16319
+  BORV:
+    4.0V:
+      0: 16383
+    2.5V:
+      0: 16255
+  Oscillator:
+    RC:
+      0: 16383
+    LP:
+      0: 16380
+    XT:
+      0: 16381
+    HS:
+      0: 16382
+  Code Protect:
+    'OFF':
+      0: 16383
+    'ON':
+      0: 8191

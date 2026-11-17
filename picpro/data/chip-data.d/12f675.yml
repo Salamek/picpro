@@ -1,0 +1,76 @@
+chip_name: 12f675
+include: true
+socket_image: dip8
+erase_mode: 2
+flash_chip: true
+power_sequence: Vpp2Vcc
+program_delay: 80
+program_tries: 1
+over_program: 0
+core_type: bit14_b
+rom_size: 2048
+eeprom_size: 128
+cp_warn: false
+cal_word: true
+band_gap: true
+icsp_only: false
+chip_id: 0xfc0
+fuses_blank:
+  0: 0x31ff
+fuses:
+  WDT:
+    Enabled:
+      0: 16383
+    Disabled:
+      0: 16375
+  PWRTE:
+    Disabled:
+      0: 16383
+    Enabled:
+      0: 16367
+  MCLRE:
+    Enabled:
+      0: 16383
+    Disabled:
+      0: 16351
+  BODEN:
+    Enabled:
+      0: 16383
+    Disabled:
+      0: 16319
+  Code Protect ROM:
+    Disabled:
+      0: 16383
+    Enabled:
+      0: 16255
+  Code Protect EEP:
+    Disabled:
+      0: 16383
+    Enabled:
+      0: 16127
+  Bandgap:
+    Highest:
+      0: 16383
+    Mid High:
+      0: 12287
+    Mid Low:
+      0: 8191
+    Lowest:
+      0: 4095
+  Oscillator:
+    RC CLKGP4 RCGP5:
+      0: 16383
+    RC IOGP4 RCGP5:
+      0: 16382
+    INTOSC CLKGP4 IOGP5:
+      0: 16381
+    INTOSC IOGP4 IOGP5:
+      0: 16380
+    EC IOGP4 CLKINGP5:
+      0: 16379
+    HS:
+      0: 16378
+    XT:
+      0: 16377
+    LP:
+      0: 16376

@@ -78,13 +78,13 @@ class ProgrammingInterface(IProgrammingInterface):
         """Write data to ROM.  data should be a binary string of data, high byte first."""
         cmd = 7
 
-        word_count = len(data) // 2
+        data_size = len(data)
         rom_size = self.chip_info.rom_size
-        if rom_size < word_count:
-            msg = f'Data too large for PIC ROM {word_count} > {rom_size}.'
+        if rom_size < data_size:
+            msg = f'Data too large for PIC ROM {data_size} > {rom_size}.'
             raise InvalidValueError(msg)
 
-        if ((word_count * 2) % 32) != 0:
+        if (data_size % 32) != 0:
             msg = 'ROM data must be a multiple of 32 bytes in size.'
             raise InvalidValueError(msg)
 
@@ -93,12 +93,12 @@ class ProgrammingInterface(IProgrammingInterface):
 
         self.connection.serial_connection.write(cmd.to_bytes(1, 'little'))
 
-        word_count_message = struct.pack('>H', word_count)
+        word_count_message = struct.pack('>H', data_size // 2)
         self.connection.serial_connection.write(word_count_message)
         self.connection.expect(ResponseEnum.YES, timeout=20)
 
         try:
-            for i in range(0, (word_count * 2), 32):
+            for i in range(0, data_size, 32):
                 to_write = data[i:(i + 32)]
                 self.connection.serial_connection.write(to_write)
                 self.connection.expect(ResponseEnum.YES, timeout=20)
@@ -222,14 +222,11 @@ class ProgrammingInterface(IProgrammingInterface):
         """Returns contents of PIC ROM as a string of big-endian values."""
         cmd = 11
 
-        # vars['rom_size'] is in words.  So multiply by two to get bytes.
-        rom_size = self.chip_info.rom_size * 2
-
         self.connection.command_start()
         self.set_programming_voltages_command(on=True)
         self.connection.serial_connection.write(cmd.to_bytes(1, 'little'))
 
-        response = self.connection.read(rom_size, timeout=180)
+        response = self.connection.read(self.chip_info.rom_size, timeout=180)
         self.set_programming_voltages_command(on=False)
         self.connection.command_end()
         return response
@@ -238,12 +235,10 @@ class ProgrammingInterface(IProgrammingInterface):
         """Returns data stored in PIC EEPROM."""
         cmd = 12
 
-        eeprom_size = self.chip_info.eeprom_size
-
         self.connection.command_start()
         self.set_programming_voltages_command(on=True)
         self.connection.serial_connection.write(cmd.to_bytes(1, 'little'))
-        response = self.connection.read(eeprom_size)
+        response = self.connection.read(self.chip_info.eeprom_size)
         self.set_programming_voltages_command(on=False)
         self.connection.command_end()
         return response

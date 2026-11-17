@@ -55,12 +55,10 @@ class FlashData:
 
         # Set memory map based on PIC architecture family
         # ROM region is always dynamic based on actual chip ROM size
-        rom_size_bytes = self.chip_info.rom_size * 2
-
         if self.chip_info.core_bits == 16:
             # 16-bit Baseline family
             self._memory_mapping = MemoryMapping(
-                rom=MemoryRegion(0x0000, rom_size_bytes),  # Was hardcoded to 0x8000
+                rom=MemoryRegion(0x0000, self.chip_info.rom_size),  # Was hardcoded to 0x8000
                 eeprom=MemoryRegion(0xf000, 0xf100),
                 config=MemoryRegion(0x300000, 0x30000e),
                 id=MemoryRegion(0x200000, 0x200010),
@@ -70,15 +68,15 @@ class FlashData:
             # Config/calibration typically beyond ROM, around 2*last_word_addr
             # We scan a conservative range that covers all baseline PICs
             self._memory_mapping = MemoryMapping(
-                rom=MemoryRegion(0x0000, rom_size_bytes),
-                config=MemoryRegion(rom_size_bytes, 0x2000),  # Scan after ROM up to 0x2000
+                rom=MemoryRegion(0x0000, self.chip_info.rom_size),
+                config=MemoryRegion(self.chip_info.rom_size, 0x2000),  # Scan after ROM up to 0x2000
                 eeprom=MemoryRegion(0x2100 * 2, 0x2100 * 2 + max(self.chip_info.eeprom_size, 256)),  # 0x4200+
             )
         else:  # core_bits == 14
             # 14-bit Midrange family (12F6xx, 16Fxxx)
             # Standard locations: Config at 0x2007 (byte 0x400E), User ID at 0x2000-0x2003, EEPROM at 0x2100+
             self._memory_mapping = MemoryMapping(
-                rom=MemoryRegion(0x0000, rom_size_bytes),  # Was hardcoded to 0x4000
+                rom=MemoryRegion(0x0000, self.chip_info.rom_size),  # Was hardcoded to 0x4000
                 config=MemoryRegion(0x4000, 0x4010),  # Includes User ID (0x4000-0x4007) and Config (0x400E)
                 eeprom=MemoryRegion(0x4200, 0x4200 + max(self.chip_info.eeprom_size, 256)),  # Was hardcoded to 0xffff
             )
@@ -118,7 +116,7 @@ class FlashData:
         self.rom_buffer = self._tobinarray_really(
             start=self._memory_mapping.rom.start,
             end=self._memory_mapping.rom.end,
-            max_size=(self.chip_info.rom_size * 2), # Makes _tobinarray_really to rise ValueError if there are data in given range over expected size of chip
+            max_size=self.chip_info.rom_size, # Makes _tobinarray_really to rise ValueError if there are data in given range over expected size of chip
             pad_callback=lambda _adr, i: rom_blank_word[i % 2],  # LoL, i % 2 returns 1/0 and rom_blank_word are two bytes with index 0 and 1 ;)
         )
 

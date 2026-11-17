@@ -23,6 +23,9 @@ def handle_fuse_blank(input_str: str) -> list[int]:
 def handle_lower(input_str: str) -> str:
     return input_str.lower()
 
+def handle_rom_size(input_str: str) -> int:
+    # We need to convert rom_size from cid file to bytes since ChipInfoEntry expects size in bytes
+    return handle_hex(input_str) * 2
 
 def handle_bool(input_str: str) -> bool | None:
     boolean_dict = {
@@ -61,7 +64,7 @@ class ChipInfoReader:
             'over_program': handle_int,
             'program_delay': handle_int,
             'program_tries': handle_int,
-            'rom_size': handle_hex,
+            'rom_size': handle_rom_size,
             'include': handle_bool,
         }
 

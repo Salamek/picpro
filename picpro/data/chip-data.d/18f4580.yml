@@ -1,0 +1,203 @@
+chip_name: 18f4580
+include: true
+socket_image: dip40
+erase_mode: 4
+flash_chip: true
+power_sequence: VccVpp1
+program_delay: 10
+program_tries: 1
+over_program: 0
+core_type: bit16_b
+rom_size: 32768
+eeprom_size: 256
+cp_warn: false
+cal_word: false
+band_gap: false
+icsp_only: false
+chip_id: 0x1a80
+fuses_blank:
+  0: 0xcf00
+  1: 0x1f1f
+  2: 0x8600
+  3: 0xd5
+  4: 0xc00f
+  5: 0xe00f
+  6: 0x400f
+fuses:
+  Osc Switchover:
+    Enabled:
+      0: 65535
+    Disabled:
+      0: 32767
+  Fail safe Clock Mon:
+    Enabled:
+      0: 65535
+    Disabled:
+      0: 49151
+  Oscillator:
+    LP Osc:
+      0: 61695
+    XT Osc:
+      0: 61951
+    HS Osc:
+      0: 62207
+    Ext RC:
+      0: 63487
+    EC Osc:
+      0: 62719
+    EC Port RA6:
+      0: 62975
+    HSPLL:
+      0: 63231
+    Int OSC:
+      0: 63743
+    Int OSC Clk RA6 PortB:
+      0: 63999
+    Int Osc Clk RA6:
+      0: 64767
+  Brownout Voltage:
+    2.1V:
+      1: 65535
+    2.8V:
+      1: 65527
+    4.3V:
+      1: 65533
+    4.6V:
+      1: 65529
+  Brownout Reset:
+    HW only:
+      1: 65535
+    HW but not sleep:
+      1: 65531
+    Enabled under SW ctrl:
+      1: 65533
+    Disabled:
+      1: 65520
+  Powerup Timer:
+    Disabled:
+      1: 65535
+    Enabled:
+      1: 65534
+  Watchdog Timer:
+    Enabled:
+      1: 65535
+    Disabled:
+      1: 65279
+  Watchdog Postscale:
+    1:32768:
+      1: 65535
+    1:16384:
+      1: 65023
+    1:8192:
+      1: 64511
+    1:4096:
+      1: 63999
+    1:2048:
+      1: 63487
+    1:1024:
+      1: 62975
+    1:512:
+      1: 62463
+    1:256:
+      1: 61951
+    1:128:
+      1: 61439
+    1:64:
+      1: 60927
+    '1:32':
+      1: 60415
+    '1:16':
+      1: 59903
+    '1:8':
+      1: 59391
+    '1:4':
+      1: 58879
+    '1:2':
+      1: 58367
+    '1:1':
+      1: 57855
+  MCLRE:
+    Enabled:
+      2: 65535
+    Disabled:
+      2: 32767
+  LPT1OSC:
+    LOW Power Mode:
+      2: 65535
+    High Pwr Mode:
+      2: 64511
+  PBADEN:
+    AD 4:0 Reset=Analog:
+      2: 65535
+    AD 4:0 Reset=Digital:
+      2: 65023
+  BBSIZ:
+    2K words:
+      3: 65535
+    1K words:
+      3: 65279
+  Background Debug:
+    Disabled:
+      3: 65535
+    Enabled:
+      3: 65407
+  XINST:
+    Enabled:
+      3: 65535
+    Disabled:
+      3: 65471
+  Low Voltage Program:
+    Enabled:
+      3: 65535
+    Disabled:
+      3: 65531
+  Stack Overflow Reset:
+    Enabled:
+      3: 65535
+    Disabled:
+      3: 65534
+  BOOT ROM Protect:
+    0000-BBSIZ Disabled:
+      4: 65535
+    0000-BBSIZ Enabled:
+      4: 49151
+  ROM Protect:
+    6000-7FFF Disabled:
+      4: 65535
+    6000-7FFF Enabled:
+      4: 65527
+  EEPROM Protect:
+    Disabled:
+      4: 65535
+    Enabled:
+      4: 32767
+  BOOT Table Write Protect:
+    0000-BBSIZ Disabled:
+      5: 65535
+    0000-BBSIZ Enabled:
+      5: 49151
+  ROM Table Write Protect:
+    6000-7FFF Disabled:
+      5: 65535
+    6000-7FFF Enabled:
+      5: 65527
+  EEPROM Table Write Protect:
+    Disabled:
+      5: 65535
+    Enabled:
+      5: 32767
+  CONFIG Table Write Protect:
+    Disabled:
+      5: 65535
+    Enabled:
+      5: 57343
+  BOOT Table Read Protect:
+    0000-BBSIZ Disabled:
+      6: 65535
+    0000-BBSIZ Enabled:
+      6: 49151
+  ROM Table Read Protect:
+    6000-7FFF Disabled:
+      6: 65535
+    6000-7FFF Enabled:
+      6: 65527

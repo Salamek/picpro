@@ -1,0 +1,218 @@
+chip_name: 18f4455
+include: true
+socket_image: dip40
+erase_mode: 4
+flash_chip: true
+power_sequence: VccVpp1
+program_delay: 10
+program_tries: 1
+over_program: 0
+core_type: bit16_b
+rom_size: 24576
+eeprom_size: 256
+cp_warn: false
+cal_word: false
+band_gap: false
+icsp_only: false
+chip_id: 0x1220
+fuses_blank:
+  0: 0xcf3f
+  1: 0x1f3f
+  2: 0x8700
+  3: 0xe5
+  4: 0xc007
+  5: 0xe007
+  6: 0x4007
+fuses:
+  USBPLL:
+    Divide by 2:
+      0: 65535
+    No Divide:
+      0: 65503
+  CPUDIV:
+    Div/6 wPLL, Div/4:
+      0: 65535
+    Div/4 wPLL, Div/3:
+      0: 65527
+    Div/3 wPLL, Div/2:
+      0: 65519
+    Div/2 wPLL, NO Div:
+      0: 65511
+  PPLDIV:
+    Osc/12 (48Mhz):
+      0: 65535
+    Osc/10 (40Mhz):
+      0: 65534
+    Osc/6 (24Mhz):
+      0: 65533
+    Osc/5 (20Mhz):
+      0: 65532
+    Osc/4 (16Mhz):
+      0: 65531
+    Osc/3 (12Mhz):
+      0: 65530
+    Osc/2 (8Mhz):
+      0: 65529
+    No Divide (4Mhz):
+      0: 65528
+  OSCSEN:
+    Disabled:
+      0: 65535
+    Enabled:
+      0: 57343
+  Oscillator:
+    HS OSC w/PLL, HS used by USB:
+      0: 65535
+    HS osc, HS used by USB:
+      0: 64767
+    Intrn osc, HS used by USB:
+      0: 64511
+    Intrn osc, XT used by USB:
+      0: 64255
+  VREGEN:
+    Enabled:
+      1: 65535
+    Disabled:
+      1: 65533
+  Brownout Voltage:
+    2.0V:
+      1: 65535
+    2.7V:
+      1: 65531
+    4.2V:
+      1: 65527
+    4.5V:
+      1: 65523
+  Brownout Detect:
+    Enabled:
+      1: 65535
+    Disabled:
+      1: 65533
+  Powerup Timer:
+    Disabled:
+      1: 65535
+    Enabled:
+      1: 65534
+  Watchdog Timer:
+    Enabled:
+      1: 65535
+    Disabled:
+      1: 65279
+  Watchdog Postscale:
+    1:32768:
+      1: 65535
+    1:16384:
+      1: 65023
+    1:8192:
+      1: 64511
+    1:4096:
+      1: 63999
+    1:2048:
+      1: 63487
+    1:1024:
+      1: 62975
+    1:512:
+      1: 62463
+    1:256:
+      1: 61951
+    1:128:
+      1: 61439
+    1:64:
+      1: 60927
+    '1:32':
+      1: 60415
+    '1:16':
+      1: 59903
+    '1:8':
+      1: 59391
+    '1:4':
+      1: 58879
+    '1:2':
+      1: 58367
+    '1:1':
+      1: 57855
+  MCLRE:
+    Enabled:
+      2: 65535
+    Disabled:
+      2: 32767
+  LPT1OSC:
+    LOW Power Mode:
+      2: 65535
+    High Pwr Mode:
+      2: 64511
+  PBADEN:
+    AD 4:0 Reset=Analog:
+      2: 65535
+    AD 4:0 Reset=Digital:
+      2: 65023
+  CCP2MX:
+    MUC RC1:
+      2: 65535
+    MUC RE7/RB3:
+      2: 65279
+  ECCMUX:
+    ENH CCP1 RE6 3:
+      2: 65535
+    ENH CCP1 RH7 4:
+      2: 65023
+  XINST:
+    Enabled:
+      3: 65535
+    Disabled:
+      3: 65471
+  Low Voltage Program:
+    Enabled:
+      3: 65535
+    Disabled:
+      3: 65531
+  Stack Overflow Reset:
+    Enabled:
+      3: 65535
+    Disabled:
+      3: 65534
+  BOOT ROM Protect:
+    0000-01FF Disabled:
+      4: 65535
+    0000-01FF Enabled:
+      4: 49151
+  ROM Protect:
+    4000-5FFF Disabled:
+      4: 65535
+    4000-5FFF Enabled:
+      4: 65531
+  EEPROM Protect:
+    Disabled:
+      4: 65535
+    Enabled:
+      4: 32767
+  BOOT Table Write Protect:
+    0000-01FF Disabled:
+      5: 65535
+    0000-01FF Enabled:
+      5: 49151
+  ROM Table Write Protect:
+    4000-5FFF Disabled:
+      5: 65535
+    4000-5FFF Enabled:
+      5: 65531
+  EEPROM Table Write Protect:
+    Disabled:
+      5: 65535
+    Enabled:
+      5: 32767
+  CONFIG Table Write Protect:
+    Disabled:
+      5: 65535
+    Enabled:
+      5: 57343
+  BOOT Table Read Protect:
+    0000-01FF Disabled:
+      6: 65535
+    0000-01FF Enabled:
+      6: 49151
+  ROM Table Read Protect:
+    2000-3FFF Disabled:
+      6: 65535
+    2000-3FFF Enabled:
+      6: 65533

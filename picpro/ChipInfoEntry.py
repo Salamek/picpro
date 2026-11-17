@@ -14,7 +14,7 @@ class ChipInfoEntry:
 
     chip_name: str
     include: bool
-    socket_image: str
+    socket_image: str | None
     erase_mode: int
     flash_chip: bool
     power_sequence: str
@@ -75,6 +75,11 @@ class ChipInfoEntry:
         '18pin': 'socket pin 2',
         '28Npin': 'socket pin 1',
         '40pin': 'socket pin 1',
+        'dip8': 'socket pin 13',
+        'dip14': 'socket pin 13',
+        'dip18': 'socket pin 2',
+        'dip28': 'socket pin 1',
+        'dip40': 'socket pin 1',
     }
 
     def to_dict(self) -> dict:
@@ -112,7 +117,7 @@ class ChipInfoEntry:
         return cls(
             chip_name=require('chip_name', str),
             include=require('include', bool),
-            socket_image=require('socket_image', str),
+            socket_image=data.get('socket_image'),
             erase_mode=require('erase_mode', int),
             flash_chip=require('flash_chip', bool),
             power_sequence=require('power_sequence', str),
@@ -147,7 +152,7 @@ class ChipInfoEntry:
         )
 
         return ProgrammingVariables(
-            rom_size_words=self.rom_size,
+            rom_size_words=self.rom_size // 2,
             eeprom_size=self.eeprom_size,
             core_type=core_type_int,
             flags=programing_vars_flags,
@@ -234,6 +239,8 @@ class ChipInfoEntry:
 
     @property
     def pin1_location_text(self) -> str:
+        if self.socket_image is None:
+            return 'No socket'
         return self._socket_image_dict[self.socket_image]
 
     @property

@@ -1,0 +1,73 @@
+chip_name: 16f876a
+include: true
+socket_image: dip28
+erase_mode: 5
+flash_chip: true
+power_sequence: VccVpp1
+program_delay: 10
+program_tries: 1
+over_program: 0
+core_type: bit14_e
+rom_size: 16384
+eeprom_size: 256
+cp_warn: false
+cal_word: false
+band_gap: false
+icsp_only: false
+chip_id: 0xe00
+fuses_blank:
+  0: 0x3fff
+fuses:
+  WDT:
+    Enabled:
+      0: 16383
+    Disabled:
+      0: 16379
+  PWRTE:
+    Disabled:
+      0: 16383
+    Enabled:
+      0: 16375
+  BODEN:
+    Enabled:
+      0: 16383
+    Disabled:
+      0: 16319
+  LVP:
+    Enabled:
+      0: 16383
+    Disabled:
+      0: 16255
+  CPD:
+    Disabled:
+      0: 16383
+    Enabled:
+      0: 16127
+  WRT Enable:
+    Enabled:
+      0: 16383
+    WRT_256:
+      0: 15871
+    WRT_1FOURTH:
+      0: 15359
+    WRT_HALF:
+      0: 14847
+  DEBUG:
+    Disabled:
+      0: 16383
+    Enabled:
+      0: 14335
+  Oscillator:
+    RC:
+      0: 16383
+    HS:
+      0: 16382
+    XT:
+      0: 16381
+    LP:
+      0: 16380
+  Code Protect:
+    Disabled:
+      0: 16383
+    Enabled:
+      0: 8191

@@ -1,0 +1,95 @@
+chip_name: 16f777
+include: true
+socket_image: dip40
+erase_mode: 3
+flash_chip: true
+power_sequence: VccFastVpp1
+program_delay: 10
+program_tries: 1
+over_program: 0
+core_type: bit14_c
+rom_size: 16384
+eeprom_size: 0
+cp_warn: false
+cal_word: false
+band_gap: false
+icsp_only: false
+chip_id: 0xde0
+fuses_blank:
+  0: 0x3fff
+  1: 0x3fff
+fuses:
+  WDT:
+    Enabled:
+      0: 16383
+    Disabled:
+      0: 16379
+  PWRTE:
+    Disabled:
+      0: 16383
+    Enabled:
+      0: 16375
+  MCLRE:
+    Enabled:
+      0: 16383
+    Disabled:
+      0: 16351
+  BOREN:
+    Enabled:
+      0: 16383
+      1: 16383
+    Sleep OFF:
+      0: 16383
+      1: 16319
+    SBOREN:
+      0: 16319
+      1: 16383
+    Disabled:
+      0: 16319
+      1: 16319
+  Brownout Voltage:
+    2.0V:
+      0: 16383
+    2.7V:
+      0: 16255
+    4.2V:
+      0: 16127
+    4.5V:
+      0: 15999
+  CCP2 Mux:
+    RC1:
+      0: 16383
+    RB3:
+      0: 12287
+  Code Protect:
+    Disabled:
+      0: 16383
+    Enabled:
+      0: 8191
+  Oscillator:
+    EXTRC_CLKOUT:
+      0: 16383
+    EXTRC_IO:
+      0: 16382
+    INTRC_CLKOUT:
+      0: 16381
+    INTRC_IO:
+      0: 16380
+    EXTCLK:
+      0: 16367
+    HS:
+      0: 16366
+    XT:
+      0: 16365
+    LP:
+      0: 16364
+  Clock Monitor:
+    Enabled:
+      1: 16383
+    Disabled:
+      1: 16382
+  Int/Ext Switch:
+    Enabled:
+      1: 16383
+    Disabled:
+      1: 16381

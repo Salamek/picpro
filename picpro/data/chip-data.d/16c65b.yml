@@ -1,0 +1,53 @@
+chip_name: 16c65b
+include: true
+socket_image: dip40
+erase_mode: 0
+flash_chip: false
+power_sequence: VccVpp1
+program_delay: 1
+program_tries: 1
+over_program: 0
+core_type: bit14_a
+rom_size: 8192
+eeprom_size: 0
+cp_warn: true
+cal_word: false
+band_gap: false
+icsp_only: false
+chip_id: 0xffff
+fuses_blank:
+  0: 0x3fff
+fuses:
+  WDT:
+    Enabled:
+      0: 16383
+    Disabled:
+      0: 16379
+  PWRTE:
+    Disabled:
+      0: 16383
+    Enabled:
+      0: 16375
+  BODEN:
+    Enabled:
+      0: 16383
+    Disabled:
+      0: 16319
+  Oscillator:
+    RC:
+      0: 16383
+    HS:
+      0: 16382
+    XT:
+      0: 16381
+    LP:
+      0: 16380
+  Code Protect:
+    Disabled:
+      0: 16383
+    CP50:
+      0: 10991
+    CP75:
+      0: 5599
+    Enabled:
+      0: 207

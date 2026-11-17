@@ -1,0 +1,198 @@
+chip_name: 18f8525
+include: true
+socket_image: null
+erase_mode: 4
+flash_chip: true
+power_sequence: VccVpp1
+program_delay: 10
+program_tries: 1
+over_program: 0
+core_type: bit16_c
+rom_size: 49152
+eeprom_size: 256
+cp_warn: false
+cal_word: false
+band_gap: false
+icsp_only: true
+chip_id: 0xac0
+fuses_blank:
+  0: 0x2f00
+  1: 0x1f0f
+  2: 0x8383
+  3: 0x85
+  4: 0xc00f
+  5: 0xe00f
+  6: 0x400f
+fuses:
+  OSCSEN:
+    Disabled:
+      0: 65535
+    Enabled:
+      0: 57343
+  Oscillator:
+    RC OSC2 RA6:
+      0: 65535
+    HS PLL:
+      0: 63231
+    EC OSC2RA6:
+      0: 62975
+    EC OSC2RA6 PLL:
+      0: 64767
+    RC OSC2RA6:
+      0: 63487
+    EC OSC2/4:
+      0: 62719
+    RC OSC2/4:
+      0: 62463
+    HS:
+      0: 62207
+    XT:
+      0: 61951
+    LP:
+      0: 61695
+  Brownout Voltage:
+    2.0V:
+      1: 65535
+    2.7V:
+      1: 65531
+    4.2V:
+      1: 65527
+    4.5V:
+      1: 65523
+  Brownout Detect:
+    Enabled:
+      1: 65535
+    Disabled:
+      1: 65533
+  Powerup Timer:
+    Disabled:
+      1: 65535
+    Enabled:
+      1: 65534
+  Watchdog Timer:
+    Enabled:
+      1: 65535
+    Disabled:
+      1: 65279
+  Watchdog Postscale:
+    1:32768:
+      1: 65535
+    1:16384:
+      1: 65023
+    1:8192:
+      1: 64511
+    1:4096:
+      1: 63999
+    1:2048:
+      1: 63487
+    1:1024:
+      1: 62975
+    1:512:
+      1: 62463
+    1:256:
+      1: 61951
+    1:128:
+      1: 61439
+    1:64:
+      1: 60927
+    '1:32':
+      1: 60415
+    '1:16':
+      1: 59903
+    '1:8':
+      1: 59391
+    '1:4':
+      1: 58879
+    '1:2':
+      1: 58367
+    '1:1':
+      1: 57855
+  WAIT:
+    Disabled:
+      2: 65535
+    MEMCON:
+      2: 65407
+  Processor Mode:
+    Microcontroller:
+      2: 65535
+    Microprocessor:
+      2: 65534
+    Microprocessor Boot:
+      2: 65533
+    Extended:
+      2: 65532
+  MCLRE:
+    Enabled:
+      2: 65535
+    Disabled:
+      2: 32767
+  CCP2MX:
+    MUC RC1:
+      2: 65535
+    MUC RE7/RB3:
+      2: 65279
+  ECCMUX:
+    ENH CCP1 RE6 3:
+      2: 65535
+    ENH CCP1 RH7 4:
+      2: 65023
+  Background Debug:
+    Disabled:
+      3: 65535
+    Enabled:
+      3: 65407
+  Low Voltage Program:
+    Enabled:
+      3: 65535
+    Disabled:
+      3: 65531
+  Stack Overflow Reset:
+    Enabled:
+      3: 65535
+    Disabled:
+      3: 65534
+  BOOT ROM Protect:
+    0000-07FF Disabled:
+      4: 65535
+    0000-07FF Enabled:
+      4: 49151
+  ROM Protect:
+    8000-BFFF Disabled:
+      4: 65535
+    8000-BFFF Enabled:
+      4: 65531
+  EEPROM Protect:
+    Disabled:
+      4: 65535
+    Enabled:
+      4: 32767
+  BOOT Table Write Protect:
+    0000-07FF Disabled:
+      5: 65535
+    0000-07FF Enabled:
+      5: 49151
+  ROM Table Write Protect:
+    8000-BFFF Disabled:
+      5: 65535
+    8000-BFFF Enabled:
+      5: 65531
+  EEPROM Table Write Protect:
+    Disabled:
+      5: 65535
+    Enabled:
+      5: 32767
+  CONFIG Table Write Protect:
+    Disabled:
+      5: 65535
+    Enabled:
+      5: 57343
+  BOOT Table Read Protect:
+    0000-07FF Disabled:
+      6: 65535
+    0000-07FF Enabled:
+      6: 49151
+  ROM Table Read Protect:
+    8000-BFFF Disabled:
+      6: 65535
+    8000-BFFF Enabled:
+      6: 65531
