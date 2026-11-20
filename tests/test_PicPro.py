@@ -341,3 +341,11 @@ def test_invalid_pic_id_is_rejected_before_connecting(
         fixture.service.program(replace(fixture.target, chip_name=chip_name), fixture.image, pic_id=pic_id)
     fixture.factory.assert_not_called()
     assert fixture.events == []
+
+
+def test_config_event_skips_device_id_check_when_definition_has_no_id(service_fixture: ServiceFixture) -> None:
+    fixture = service_fixture
+    fixture.chip.chip_id = 0xffff
+    fixture.service.read_config(fixture.target)
+    event = next(event for event in fixture.events if isinstance(event, ChipConfigEvent))
+    assert not event.device_id_mismatch

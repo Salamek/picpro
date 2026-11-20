@@ -65,6 +65,12 @@ def _display_event(event: PicProEvent, operation: str, output_file: Path | None 
     if operation == 'programmer_info':
         return
     if isinstance(event, ChipConfigEvent):
+        if event.device_id_mismatch:
+            typer.echo(
+                f'Warning: Device ID mismatch for {event.chip.chip_name}. '
+                f'Expected {event.chip.chip_id:#06x}, read {event.config.chip_id:#06x}.',
+                err=True,
+            )
         if operation == 'verify':
             typer.echo(f'Chip config: {event.config}')
         else:

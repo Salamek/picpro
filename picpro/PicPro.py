@@ -67,6 +67,13 @@ class ChipConfigEvent:
     chip: ChipInfoEntry
     config: ChipConfig
 
+    @property
+    def device_id_mismatch(self) -> bool:
+        # The chip database excludes the five low revision bits.
+        # A definition with 0xffff has no device ID to compare.
+        expected = self.chip.chip_id
+        return expected != 0xffff and (self.config.chip_id & 0xffe0) != expected
+
 
 @dataclass(frozen=True)
 class VerificationEvent:

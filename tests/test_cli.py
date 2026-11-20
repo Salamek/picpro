@@ -525,3 +525,14 @@ def test_importing_cli_does_not_parse_arguments_or_install_signal_handlers() -> 
     assert result.returncode == 0, result.stderr
     assert result.stdout == ''
     assert result.stderr == ''
+
+
+@pytest.mark.parametrize(('device_id', 'warn'), [(0x0fc0, False), (0x0fcb, False), (0x0fd0, False), (0x0f8b, True)])
+def test_read_config_warns_for_device_id_mismatch(cli: CLI, device_id: int, *, warn: bool) -> None:
+    cli.config.chip_id = device_id
+    result = cli.run(*cli.hardware_args('read_chip_config'))
+    assert result.code == 0
+    if warn:
+        assert 'Device ID mismatch for 12f675. Expected 0x0fc0, read 0x0f8b.' in result.stderr
+    else:
+        assert result.stderr == ''
