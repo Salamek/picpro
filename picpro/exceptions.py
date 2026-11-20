@@ -36,3 +36,7 @@ class InvalidFirmwareError(ValueError):
 
 class InvalidPicIdError(ValueError):
     """The PIC ID override has invalid hexadecimal data or the wrong length."""
+
+
+class ICSPRequiredError(ValueError):
+    """The selected chip can only be programmed through ICSP."""

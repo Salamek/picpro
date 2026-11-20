@@ -18,7 +18,7 @@ from yaml import YAMLError
 import picpro as app_root
 from picpro.ChipDataReader import ChipDataReader
 from picpro.ChipInfoEntry import ChipInfoEntry
-from picpro.exceptions import FormatError, FuseError, InvalidFirmwareError, InvalidPicIdError, InvalidResponseError, UnknownChipError
+from picpro.exceptions import FormatError, FuseError, ICSPRequiredError, InvalidFirmwareError, InvalidPicIdError, InvalidResponseError, UnknownChipError
 from picpro.PicPro import ChipConfigEvent, MemoryType, NoEEPROMError, PicPro, PicProEvent, Stage, StageEvent, Target, VerificationEvent
 from picpro.protocol.ChipConfig import ChipConfig
 from picpro.protocol.p18a.Connection import Connection
@@ -146,6 +146,8 @@ def _report_errors(operation: str, *, port: str | None = None, firmware: Path | 
         _fail(operation, 'This chip has no EEPROM.')
     except (HexReaderError, InvalidFirmwareError) as error:
         _fail(operation, f'Invalid firmware "{firmware}": {error}')
+    except ICSPRequiredError as error:
+        _fail(operation, f'{error} Connect through ICSP and rerun with --icsp.')
     except InvalidPicIdError as error:
         _fail(operation, str(error))
     except FuseError as error:

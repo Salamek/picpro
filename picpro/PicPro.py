@@ -18,6 +18,7 @@ from yaml import ScalarNode
 from picpro.ChipDataReader import ChipDataReader
 from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.ChipInfoReader import ChipInfoReader
+from picpro.exceptions import ICSPRequiredError
 from picpro.FlashData import FlashData
 from picpro.protocol.ChipConfig import ChipConfig
 from picpro.protocol.IConnection import IConnection
@@ -201,6 +202,9 @@ class PicPro:
 
     @contextmanager
     def _interface(self, target: Target, chip: ChipInfoEntry, should_cancel: CancellationCheck | None) -> Iterator[IProgrammingInterface]:
+        if chip.icsp_only and not target.icsp:
+            msg = f'{chip.chip_name} requires ICSP mode.'
+            raise ICSPRequiredError(msg)
         self._stage(Stage.CONNECTING, should_cancel)
         with self._connection_factory(target.port) as connection:
             self._stage(Stage.INITIALIZING, should_cancel)

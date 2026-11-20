@@ -276,7 +276,7 @@ def test_dump_public_command_writes_requested_format(cli: CLI, memory: str, *, b
 
 
 def test_dump_chip_without_eeprom_creates_no_file(cli: CLI) -> None:
-    result = cli.run('dump', 'eeprom', '-p', '/dev/fake', '-o', str(cli.output), '-t', '10f200')
+    result = cli.run('dump', 'eeprom', '-p', '/dev/fake', '-o', str(cli.output), '-t', '10f200', '--icsp')
     assert result.code == 1
     assert 'This chip has no EEPROM.' in result.stderr
     assert not cli.output.exists()
@@ -536,3 +536,23 @@ def test_read_config_warns_for_device_id_mismatch(cli: CLI, device_id: int, *, w
         assert 'Device ID mismatch for 12f675. Expected 0x0fc0, read 0x0f8b.' in result.stderr
     else:
         assert result.stderr == ''
+
+
+def test_icsp_only_chip_requires_flag_before_opening_port(cli: CLI) -> None:
+    chip_file = cli.database / '12f675.yml'
+    definition = yaml.safe_load(chip_file.read_text(encoding='utf-8'))
+    definition['icsp_only'] = True
+    chip_file.write_text(yaml.safe_dump(definition), encoding='utf-8')
+    args = cli.hardware_args('erase')
+
+    result = cli.run(*args)
+    assert result.code == 1
+    assert '12f675 requires ICSP mode.' in result.stderr
+    assert '--icsp' in result.stderr
+    assert 'Traceback' not in result.stderr
+    cli.serial_factory.assert_not_called()
+
+    result = cli.run(*args, '--icsp')
+    assert result.code == 0
+    assert result.stderr == ''
+    cli.serial_factory.assert_called_once()
