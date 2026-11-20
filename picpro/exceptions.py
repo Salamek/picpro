@@ -32,3 +32,7 @@ class UnknownChipError(KeyError):
 
 class InvalidFirmwareError(ValueError):
     """The firmware data does not fit the selected chip."""
+
+
+class InvalidPicIdError(ValueError):
+    """The PIC ID override has invalid hexadecimal data or the wrong length."""

@@ -231,6 +231,7 @@ class PicPro:
                 should_cancel: CancellationCheck | None = None) -> VerificationResult:
         self._check_cancel(should_cancel)
         data = self.inspect_hex(target.chip_name, hex_file, pic_id=pic_id, fuses=fuses)
+        id_data = data.id_data
         with self._interface(target, data.chip_info, should_cancel) as interface:
             config = self._config(interface, data.chip_info, should_cancel)
             self._preserve_calibration(data, config, should_cancel)
@@ -247,7 +248,7 @@ class PicPro:
                 self._stage(Stage.PROGRAMMING_EEPROM, should_cancel)
                 interface.program_eeprom(data.eeprom_data)
             self._stage(Stage.PROGRAMMING_FUSES, should_cancel)
-            transaction = interface.program_id_fuses(data.id_data, data.fuse_data)
+            transaction = interface.program_id_fuses(id_data, data.fuse_data)
             result = self._verify(interface, data, should_cancel)
             if not result.success:
                 return result

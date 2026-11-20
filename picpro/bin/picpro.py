@@ -18,7 +18,7 @@ from yaml import YAMLError
 import picpro as app_root
 from picpro.ChipDataReader import ChipDataReader
 from picpro.ChipInfoEntry import ChipInfoEntry
-from picpro.exceptions import FormatError, FuseError, InvalidFirmwareError, InvalidResponseError, UnknownChipError
+from picpro.exceptions import FormatError, FuseError, InvalidFirmwareError, InvalidPicIdError, InvalidResponseError, UnknownChipError
 from picpro.PicPro import ChipConfigEvent, MemoryType, NoEEPROMError, PicPro, PicProEvent, Stage, StageEvent, Target, VerificationEvent
 from picpro.protocol.ChipConfig import ChipConfig
 from picpro.protocol.p18a.Connection import Connection
@@ -140,6 +140,8 @@ def _report_errors(operation: str, *, port: str | None = None, firmware: Path | 
         _fail(operation, 'This chip has no EEPROM.')
     except (HexReaderError, InvalidFirmwareError) as error:
         _fail(operation, f'Invalid firmware "{firmware}": {error}')
+    except InvalidPicIdError as error:
+        _fail(operation, str(error))
     except FuseError as error:
         _fail(operation, f'Fuse error: {error}')
     except (FormatError, YAMLError) as error:
@@ -163,21 +165,12 @@ def program(port: Port, pic_type: ChipType, hex_file: InputFile, *,
         fuses[name] = value
     with _report_errors('program', port=port, firmware=hex_file):
         service = _service('program')
-        if pic_id or fuses:
+        if fuses:
             chip = service.get_chip(pic_type)
-            if pic_id:
-                try:
-                    id_bytes = bytes.fromhex(pic_id)
-                except ValueError:
-                    _fail('program', 'PIC ID must contain hexadecimal byte pairs.')
-                expected_bytes = 8 if chip.core_bits == 16 else 4
-                if len(id_bytes) != expected_bytes:
-                    _fail('program', f'PIC ID must be exactly {expected_bytes} bytes for {pic_type}.')
-            if fuses:
-                try:
-                    chip.encode_fuse_data(fuses)
-                except FuseError as error:
-                    _fail('program', f'Invalid fuse setting. {error}\nValid settings:\n{chip.fuse_doc.rstrip()}')
+            try:
+                chip.encode_fuse_data(fuses)
+            except FuseError as error:
+                _fail('program', f'Invalid fuse setting. {error}\nValid settings:\n{chip.fuse_doc.rstrip()}')
         result = service.program(Target(port, pic_type, icsp), hex_file, pic_id=pic_id, fuses=fuses)
         if not result.success:
             raise typer.Exit(1)

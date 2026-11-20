@@ -5,7 +5,7 @@ from collections.abc import Callable
 from intelhex import IntelHex
 
 from picpro.ChipInfoEntry import ChipInfoEntry
-from picpro.exceptions import InvalidFirmwareError
+from picpro.exceptions import InvalidFirmwareError, InvalidPicIdError
 from picpro.tools import swab_bytes
 
 
@@ -253,7 +253,16 @@ class FlashData:
     @property
     def id_data(self) -> bytes:
         if self.pic_id:
-            return bytes.fromhex(self.pic_id)
+            try:
+                value = bytes.fromhex(self.pic_id)
+            except ValueError as error:
+                msg = 'PIC ID must contain hexadecimal byte pairs.'
+                raise InvalidPicIdError(msg) from error
+            expected_bytes = 8 if self.chip_info.core_bits == 16 else 4
+            if len(value) != expected_bytes:
+                msg = f'PIC ID must be exactly {expected_bytes} bytes for {self.chip_info.chip_name}.'
+                raise InvalidPicIdError(msg)
+            return value
 
         id_data = self.id_buffer.data[:8] if self.id_buffer else self.config_buffer.data[:8]
         return id_data if self.chip_info.core_bits == 16 else bytes([id_data[x] for x in range(1, 8, 2)])

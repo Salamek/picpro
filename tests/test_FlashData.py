@@ -186,7 +186,7 @@ def test_explicit_id_overrides_hex(small_chip: ChipInfoEntry) -> None:
 
 def test_invalid_id_hex(small_chip: ChipInfoEntry) -> None:
     data = FlashData(small_chip, IntelHex(), pic_id='invalid')
-    with pytest.raises(ValueError, match='non-hexadecimal'):
+    with pytest.raises(ValueError, match='hexadecimal byte pairs'):
         _ = data.id_data
 
 

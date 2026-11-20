@@ -9,6 +9,7 @@ from intelhex import IntelHex
 
 from picpro.ChipDataReader import ChipDataReader
 from picpro.ChipInfoEntry import ChipInfoEntry
+from picpro.exceptions import InvalidPicIdError
 from picpro.PicPro import (
     ChipConfigEvent,
     MemoryType,
@@ -322,3 +323,21 @@ def test_programmer_info_supports_pre_cancellation(service_fixture: ServiceFixtu
     with pytest.raises(OperationCancelledError):
         f.service.programmer_info('/dev/fake', should_cancel=lambda: True)
     f.factory.assert_not_called()
+
+
+@pytest.mark.parametrize(('chip_name', 'pic_id', 'message'), [
+    ('12f675', 'ZZ', 'hexadecimal byte pairs'),
+    ('12f675', '12', 'exactly 4 bytes'),
+    ('12f675', '0011223344', 'exactly 4 bytes'),
+    ('18f2550', '1234ABCD', 'exactly 8 bytes'),
+])
+def test_invalid_pic_id_is_rejected_before_connecting(
+        service_fixture: ServiceFixture, yaml_chip_data_path: Path, chip_name: str, pic_id: str, message: str,
+) -> None:
+    fixture = service_fixture
+    chip = ChipDataReader(yaml_chip_data_path).get_chip(chip_name)
+    fixture.repository.chip_entries[chip_name] = chip
+    with pytest.raises(InvalidPicIdError, match=message):
+        fixture.service.program(replace(fixture.target, chip_name=chip_name), fixture.image, pic_id=pic_id)
+    fixture.factory.assert_not_called()
+    assert fixture.events == []
