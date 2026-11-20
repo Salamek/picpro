@@ -2,6 +2,7 @@ import ast
 import importlib
 import json
 import os
+import re
 import runpy
 import shutil
 import subprocess
@@ -410,8 +411,10 @@ def test_packaged_yaml_cli_works_without_any_bundled_cid(tmp_path: Path) -> None
 def test_command_help_does_not_open_hardware(cli: CLI, command: str) -> None:
     result = cli.run(command, '--help')
     assert result.code == 0
-    assert f'Usage: picpro {command}' in result.stdout
-    assert '--help' in result.stdout
+    # Rich can style individual words in the usage line, including in GitHub Actions.
+    help_text = re.sub(r'\x1b\[[0-9;]*m', '', result.stdout)
+    assert f'Usage: picpro {command}' in help_text
+    assert '--help' in help_text
     assert result.stderr == ''
     cli.serial_factory.assert_not_called()
 
