@@ -134,9 +134,12 @@ class FlashData:
                 pad_callback=lambda _adr, i: self._fuse_data_blank[i],
             )
         else:
+            # The baseline configuration word is at logical word address 0x0fff.
+            # Intel HEX uses byte addresses, so that word starts at 0x1ffe.
+            fuse_start = 0x1ffe if self.chip_info.core_bits == 12 else 0x400e
             self.fuse_buffer = self._tobinarray_really(
-                start=0x400e,
-                end=0x400e + len(self._fuse_data_blank),
+                start=fuse_start,
+                end=fuse_start + len(self._fuse_data_blank),
                 pad_callback=lambda _adr, i: self._fuse_data_blank[i],
             )
 

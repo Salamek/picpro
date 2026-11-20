@@ -1,10 +1,13 @@
 
 from dataclasses import replace
+from io import StringIO
+from pathlib import Path
 from typing import Literal
 
 import pytest
 from intelhex import IntelHex
 
+from picpro.ChipDataReader import ChipDataReader
 from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.exceptions import FuseError
 from picpro.FlashData import FlashData, PaddedBuffer
@@ -177,6 +180,20 @@ def test_user_id_from_configuration(small_chip: ChipInfoEntry, core: str) -> Non
     image.frombytes(b'\x23\x01')
     image.frombytes(b'\x01\x00\x02\x00\x03\x00\x04\x00', offset=start)
     assert FlashData(chip, image).id_data == b'\x01\x02\x03\x04'
+
+
+def test_pic12c508a_reads_configuration_word_from_issue_4(yaml_chip_data_path: Path) -> None:
+    chip = ChipDataReader(yaml_chip_data_path).get_chip('12c508a')
+    image = IntelHex(StringIO(
+        ':080000002500C70C0200660098\n'
+        ':080400000800080009000100DA\n'
+        ':021FFE00EA0FE8\n'
+        ':00000001FF\n',
+    ))
+    data = FlashData(chip, image)
+    assert data.rom_buffer.raw_size == 8
+    assert data.id_data == bytes.fromhex('08080901')
+    assert data.fuse_data == [0x0fea]
 
 
 def test_explicit_id_overrides_hex(small_chip: ChipInfoEntry) -> None:
