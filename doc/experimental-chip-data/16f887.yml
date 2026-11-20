@@ -1,0 +1,74 @@
+# PIC16F88X Memory Programming Specification, DS41287C.
+# Firmware parameters below reproduce the issue #49 experiment.
+# The bit14_e write and erase algorithms are unverified for this device.
+chip_name: 16f887
+include: true
+socket_image: dip40
+erase_mode: 5
+flash_chip: true
+power_sequence: VccVpp1
+program_delay: 10
+program_tries: 1
+over_program: 0
+core_type: bit14_e
+rom_size: 16384
+eeprom_size: 256
+cp_warn: false
+cal_word: false
+band_gap: false
+icsp_only: false
+chip_id: 0x2080
+fuses_blank:
+  0: 0x3fff
+  1: 0x3fff
+# List the most specific masks first for multi-bit fuse fields.
+fuses:
+  Oscillator:
+    LP: {0: 0x3ff8}
+    INTOSCIO: {0: 0x3ffc}
+    HS: {0: 0x3ffa}
+    XT: {0: 0x3ff9}
+    RCIO: {0: 0x3ffe}
+    INTOSC: {0: 0x3ffd}
+    EC: {0: 0x3ffb}
+    RC: {0: 0x3fff}
+  WDT:
+    Enabled: {0: 0x3fff}
+    Disabled: {0: 0x3ff7}
+  PWRTE:
+    Disabled: {0: 0x3fff}
+    Enabled: {0: 0x3fef}
+  MCLRE:
+    Enabled: {0: 0x3fff}
+    Disabled: {0: 0x3fdf}
+  Code Protect:
+    Disabled: {0: 0x3fff}
+    Enabled: {0: 0x3fbf}
+  CPD:
+    Disabled: {0: 0x3fff}
+    Enabled: {0: 0x3f7f}
+  BOREN:
+    Disabled: {0: 0x3cff}
+    Disabled in Sleep: {0: 0x3eff}
+    Software Controlled: {0: 0x3dff}
+    Enabled: {0: 0x3fff}
+  IESO:
+    Enabled: {0: 0x3fff}
+    Disabled: {0: 0x3bff}
+  FCMEN:
+    Enabled: {0: 0x3fff}
+    Disabled: {0: 0x37ff}
+  LVP:
+    Enabled: {0: 0x3fff}
+    Disabled: {0: 0x2fff}
+  DEBUG:
+    Disabled: {0: 0x3fff}
+    Enabled: {0: 0x1fff}
+  BOR Voltage:
+    4.0V: {1: 0x3fff}
+    2.1V: {1: 0x3eff}
+  Write Protect:
+    First 4096 Words: {1: 0x39ff}
+    First 256 Words: {1: 0x3dff}
+    First 2048 Words: {1: 0x3bff}
+    Disabled: {1: 0x3fff}
