@@ -5,6 +5,7 @@ from pathlib import Path
 import yaml
 
 from picpro.ChipInfoEntry import ChipInfoEntry
+from picpro.exceptions import UnknownChipError
 
 log = logging.getLogger(__name__)
 
@@ -19,7 +20,7 @@ class ChipDataReader:
     def get_chip(self, name: str) -> ChipInfoEntry:
         chip_file = self._data_dir / f'{name.lower()}.yml'
         if not chip_file.is_file():
-            raise KeyError(name)
+            raise UnknownChipError(name)
         with chip_file.open('r', encoding='UTF-8') as f:
             return self._parse(yaml.safe_load(f))
 

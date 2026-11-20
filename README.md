@@ -58,6 +58,11 @@ and then install by running
 pacman -Sy picpro
 ```
 
+## Desktop GUI
+
+The desktop interface is distributed separately as `picpro-gui`.
+It uses the PicPro application API described below.
+
 ## Application API
 
 `PicPro` provides synchronous workflows without importing the CLI, printing,

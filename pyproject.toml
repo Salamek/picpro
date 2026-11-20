@@ -55,7 +55,7 @@ version = {attr = "picpro.__version__"}
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["picpro*"]
+include = ["picpro", "picpro.*"]
 
 [tool.setuptools.package-data]
 "picpro" = [
@@ -90,7 +90,6 @@ max-returns = 10
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101", "PLR2004", "INP001", "E501", "N999", "PLR0915", "C901"]  # Use of assert detected
-"picpro/bin/picpro.py" = ["T201"] # Print
 
 
 [tool.pytest.ini_options]

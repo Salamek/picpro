@@ -24,3 +24,11 @@ class InvalidRecordError(Exception):
 
 class InvalidChecksumError(Exception):
     """Indicates a failed checksum test."""
+
+
+class UnknownChipError(KeyError):
+    """The requested chip has no definition."""
+
+
+class InvalidFirmwareError(ValueError):
+    """The firmware data does not fit the selected chip."""

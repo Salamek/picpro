@@ -5,6 +5,7 @@ from collections.abc import Callable
 from intelhex import IntelHex
 
 from picpro.ChipInfoEntry import ChipInfoEntry
+from picpro.exceptions import InvalidFirmwareError
 from picpro.tools import swab_bytes
 
 
@@ -166,7 +167,7 @@ class FlashData:
             le_ok = le_ok and (le_word & blank) == le_word
             if not (le_ok or be_ok):
                 msg = 'Invalid ROM word.'
-                raise ValueError(msg)
+                raise InvalidFirmwareError(msg)
         # Default to little endian for ambiguous PIC HEX images.
         return le_ok
 
@@ -181,10 +182,10 @@ class FlashData:
         for address in self.hex_file.addresses():
             if rom_end <= address < rom_area_end:
                 msg = f'ROM data at {address:#x} exceeds chip ROM size {rom_end} bytes.'
-                raise ValueError(msg)
+                raise InvalidFirmwareError(msg)
             if address >= self._memory_mapping.eeprom.end:
                 msg = f'EEPROM data at {address:#x} exceeds chip EEPROM size {self.chip_info.eeprom_size} bytes.'
-                raise ValueError(msg)
+                raise InvalidFirmwareError(msg)
 
     def _unpack_eeprom_words(self, *, little_endian: bool) -> None:
         """Collapse midrange EEPROM words to one data byte each.

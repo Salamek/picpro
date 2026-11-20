@@ -17,6 +17,7 @@ from zipfile import ZipFile
 import pytest
 import yaml
 from intelhex import IntelHex
+from serial import SerialException, SerialTimeoutException
 
 from picpro import __version__
 from picpro.ChipDataReader import ChipDataReader
@@ -186,8 +187,10 @@ def test_hex_info_errors_do_not_open_programmer(cli: CLI, failure: str) -> None:
     image = cli.image.with_name('missing.hex') if failure == 'missing_file' else cli.image
     chip = 'UNKNOWN' if failure == 'unknown_chip' else '12f675'
     result = cli.run('hex_info', str(image), chip)
-    expected = 'Unable to find hex file' if failure == 'missing_file' else 'Unable to find chip type "UNKNOWN"'
-    assert expected in result.stdout
+    expected = str(image) if failure == 'missing_file' else 'Unable to find chip type "UNKNOWN"'
+    assert result.code == 1
+    assert expected in result.stderr
+    assert 'Traceback' not in result.stderr
     cli.serial_factory.assert_not_called()
 
 
@@ -211,8 +214,10 @@ def test_program_parses_repeated_fuses_id_and_preserves_calibration(cli: CLI) ->
 @pytest.mark.parametrize('fuse', ['UNKNOWN:Enabled', 'WDT:unknown'])
 def test_invalid_fuses_print_valid_choices_before_opening_port(cli: CLI, fuse: str) -> None:
     result = cli.run(*cli.hardware_args('program'), f'--fuse={fuse}')
-    assert 'Invalid fuse setting.' in result.stdout
-    assert "'WDT' : ('Enabled', 'Disabled')" in result.stdout
+    assert result.code == 1
+    assert 'Traceback' not in result.stderr
+    assert 'Invalid fuse setting.' in result.stderr
+    assert "'WDT' : ('Enabled', 'Disabled')" in result.stderr
     cli.serial_factory.assert_not_called()
 
 
@@ -242,7 +247,7 @@ def test_verify_mismatch_returns_failure_and_closes_port(cli: CLI, memory: str) 
     else:
         cli.device.work_thread.eeprom_data = b'\x00' * 128
     result = cli.run(*cli.hardware_args('verify'))
-    assert f'{memory.upper()} verification failed.' in result.stdout
+    assert f'{memory.upper()} verification failed.' in result.stderr
     assert result.code == 1
     assert not cli.device.is_open
 
@@ -250,7 +255,7 @@ def test_verify_mismatch_returns_failure_and_closes_port(cli: CLI, memory: str) 
 def test_program_verification_failure_returns_failure_and_closes_port(cli: CLI) -> None:
     cli.device.work_thread.response_overrides[(11, cli.expected.rom_data)] = b'\x00' * 2048
     result = cli.run(*cli.hardware_args('program'))
-    assert 'ROM verification failed.' in result.stdout
+    assert 'ROM verification failed.' in result.stderr
     assert result.code == 1
     assert not cli.device.is_open
 
@@ -272,7 +277,8 @@ def test_dump_public_command_writes_requested_format(cli: CLI, memory: str, *, b
 
 def test_dump_chip_without_eeprom_creates_no_file(cli: CLI) -> None:
     result = cli.run('dump', 'eeprom', '-p', '/dev/fake', '-o', str(cli.output), '-t', '10f200')
-    assert 'This chip has no EEPROM!' in result.stdout
+    assert result.code == 1
+    assert 'This chip has no EEPROM.' in result.stderr
     assert not cli.output.exists()
     assert not cli.device.is_open
 
@@ -306,14 +312,57 @@ def test_programmer_info_output(cli: CLI) -> None:
 
 
 @pytest.mark.parametrize(('error', 'message'), [
-    (ConnectionError('Port unavailable'), 'Unable to open serial port "/dev/fake".'),
-    (InvalidResponseError('bad reply'), 'Unable to initialize connection to programmer. bad reply'),
+    (ConnectionError('Port unavailable'), 'Unable to connect to programmer'),
+    (InvalidResponseError('bad reply'), 'Invalid response from programmer'),
 ])
-def test_programmer_info_connection_errors(cli: CLI, error: Exception, message: str) -> None:
+@pytest.mark.parametrize('command', ['programmer_info', 'verify'])
+def test_connection_errors(cli: CLI, command: str, error: Exception, message: str) -> None:
     cli.serial_factory.side_effect = error
-    result = cli.run('programmer_info', '-p', '/dev/fake')
-    assert message in result.stdout
+    args = ['programmer_info', '-p', '/dev/fake'] if command == 'programmer_info' else cli.hardware_args(command)
+    result = cli.run(*args)
+    assert result.code == 1
+    assert f'{command}: {message}' in result.stderr
+    assert str(error) in result.stderr
     assert 'Traceback' not in result.stderr
+
+
+@pytest.mark.parametrize(('error', 'message'), [
+    (InvalidResponseError('short ROM read'), 'Invalid response from programmer'),
+    (SerialException('device disconnected'), 'Serial communication failed'),
+    (SerialTimeoutException('write timeout'), 'Operation timed out'),
+])
+def test_read_failure_during_verification_closes_port(cli: CLI, error: Exception, message: str) -> None:
+    with patch('picpro.protocol.p18a.ProgrammingInterface.ProgrammingInterface.read_rom', side_effect=error):
+        result = cli.run(*cli.hardware_args('verify'))
+    assert result.code == 1
+    assert f'verify: {message}' in result.stderr
+    assert str(error) in result.stderr
+    assert 'Traceback' not in result.stderr
+    assert not cli.device.is_open
+
+
+@pytest.mark.parametrize('content', ['invalid record', ':02000000FFFF00\n:00000001FF\n'])
+def test_bad_firmware_is_reported_before_opening_port(cli: CLI, content: str) -> None:
+    cli.image.write_text(content, encoding='ascii')
+    result = cli.run(*cli.hardware_args('verify'))
+    assert result.code == 1
+    assert f'Invalid firmware "{cli.image}"' in result.stderr
+    assert 'Traceback' not in result.stderr
+    cli.serial_factory.assert_not_called()
+
+
+@pytest.mark.parametrize('pic_id', ['ZZ', '12', '0011223344'])
+def test_invalid_pic_id_is_reported_before_opening_port(cli: CLI, pic_id: str) -> None:
+    result = cli.run(*cli.hardware_args('program'), '--id', pic_id)
+    assert result.code == 1
+    assert 'PIC ID must' in result.stderr
+    assert 'Traceback' not in result.stderr
+    cli.serial_factory.assert_not_called()
+
+
+def test_internal_key_error_propagates(cli: CLI) -> None:
+    with patch('picpro.PicPro.PicPro.verify', side_effect=KeyError('internal state')), pytest.raises(KeyError, match='internal state'):
+        cli.run(*cli.hardware_args('verify'))
 
 
 def test_migrate_command_writes_yaml_chip_definitions(cli: CLI, tmp_path: Path) -> None:
@@ -352,7 +401,7 @@ def test_pic18_fuses_commit_only_after_successful_verification(cli: CLI, *, veri
     assert state.rom_data == expected.rom_data
     assert state.eeprom_data == b'\x11\x22\x33\x44' + b'\xff' * 252
     if verification_fails:
-        assert 'ROM verification failed.' in result.stdout
+        assert 'ROM verification failed.' in result.stderr
         assert 'Committing 18Fxxxx fuse data.' not in result.stdout
         assert state.chip_config.fuses == [0xffff] * 7
         assert state.pending_fuses == chip.fuse_blank
