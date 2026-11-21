@@ -302,7 +302,7 @@ def chipdata_migrate(cid_file: Annotated[Path | None, typer.Argument(help='Legac
 
 
 def main() -> None:
-    signal.signal(signal.SIGINT, lambda _signal, _frame: sys.exit(0))  # Properly handle Control+C
+    signal.signal(signal.SIGINT, lambda _signal, _frame: sys.exit(130))  # Control+C: close the connection, exit 128 + SIGINT
     app(prog_name='picpro')
 
 
