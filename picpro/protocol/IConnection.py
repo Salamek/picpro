@@ -54,6 +54,13 @@ class IConnection:
 
         return result
 
+    @staticmethod
+    def check_response_length(result: bytes, count: int) -> None:
+        """Raise InvalidResponseError if the response has an unexpected length."""
+        if len(result) != count:
+            msg = f'Expected {count} bytes, received {len(result)}.'
+            raise InvalidResponseError(msg)
+
     def expect(self, expected_response: ResponseEnum, timeout: float | None = 5, *, send_command_end: bool = False) -> None:
         """Raise an exception if the expected response byte is not sent by the PIC programmer before timeout."""
         expected = expected_response.value

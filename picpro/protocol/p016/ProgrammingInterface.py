@@ -230,6 +230,7 @@ class ProgrammingInterface(IProgrammingInterface):
         response = self.connection.read(self.chip_info.rom_size, timeout=180)
         self.set_programming_voltages_command(on=False)
         self.connection.command_end()
+        self.connection.check_response_length(response, self.chip_info.rom_size)
         return response
 
     def read_eeprom(self) -> bytes:
@@ -242,6 +243,7 @@ class ProgrammingInterface(IProgrammingInterface):
         response = self.connection.read(self.chip_info.eeprom_size)
         self.set_programming_voltages_command(on=False)
         self.connection.command_end()
+        self.connection.check_response_length(response, self.chip_info.eeprom_size)
         return response
 
     def read_config(self) -> ChipConfig:
@@ -257,6 +259,7 @@ class ProgrammingInterface(IProgrammingInterface):
         response = self.connection.read(26)
         self.set_programming_voltages_command(on=False)
         self.connection.command_end()
+        self.connection.check_response_length(response, 26)
 
         return ChipConfig.from_bytes(response)
 
