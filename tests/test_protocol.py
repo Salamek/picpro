@@ -399,3 +399,27 @@ def test_program_eeprom_from_word_encoded_hex(mock_programming_interface: IProgr
     assert data.eeprom_data == expected
     mock_programming_interface.program_eeprom(data.eeprom_data)
     assert mock_programming_interface.read_eeprom() == expected
+
+
+@pytest.mark.parametrize('method', ['read_rom', 'read_eeprom', 'read_config'])
+@pytest.mark.parametrize('empty', [False, True], ids=['partial', 'empty'])
+def test_short_read_raises(mock_programming_interface: IProgrammingInterface,
+                           mock_serial_device: MockedDevice, method: str, *, empty: bool) -> None:
+    connection = mock_programming_interface.connection
+    original = connection.read
+    expected_size = {
+        'read_rom': mock_programming_interface.chip_info.rom_size,
+        'read_eeprom': mock_programming_interface.chip_info.eeprom_size,
+        'read_config': 26,
+    }[method]
+    received_size = 0 if empty else expected_size - 1
+
+    def short_read(count: int = 1, timeout: float | None = 5) -> bytes:
+        data = original(count, timeout)
+        return data[:received_size] if count == expected_size else data
+
+    with patch.object(connection, 'read', side_effect=short_read), \
+            pytest.raises(InvalidResponseError, match=rf'Expected {expected_size} bytes, received {received_size}\.'):
+        getattr(mock_programming_interface, method)()
+    assert not mock_serial_device.work_thread.is_programming_voltages_on
+    assert not mock_serial_device.work_thread.in_jump_table
