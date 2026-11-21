@@ -40,3 +40,7 @@ class InvalidPicIdError(ValueError):
 
 class ICSPRequiredError(ValueError):
     """The selected chip can only be programmed through ICSP."""
+
+
+class UnsupportedChipError(ValueError):
+    """The chip parameters are not supported by the programmer protocol."""

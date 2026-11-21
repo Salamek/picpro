@@ -1,6 +1,7 @@
 import threading
 from collections.abc import Iterator
 from dataclasses import replace
+from pathlib import Path
 from typing import cast
 from unittest.mock import MagicMock, patch
 
@@ -9,8 +10,10 @@ import serial
 from intelhex import IntelHex
 
 from picpro.ChipInfoEntry import ChipInfoEntry
-from picpro.exceptions import InvalidResponseError, InvalidValueError
+from picpro.exceptions import InvalidResponseError, InvalidValueError, UnsupportedChipError
 from picpro.FlashData import FlashData
+from picpro.PicPro import PicPro, Target
+from picpro.protocol.auto import open_connection
 from picpro.protocol.IConnection import IConnection
 from picpro.protocol.IProgrammingInterface import IProgrammingInterface
 from picpro.protocol.p014.Connection import Connection as P014Connection
@@ -99,6 +102,107 @@ def test_programmer_version(mock_connection: IConnection) -> None:
 def test_programmer_protocol(mock_connection: IConnection) -> None:
     result = mock_connection.programmer_protocol()
     assert result == mock_connection.expected_programmer_protocol
+
+
+def test_auto_detection_selects_protocol_and_keeps_one_connection(mock_serial_device: MockedDevice, protocol: bytes) -> None:
+    with patch('serial.Serial', return_value=mock_serial_device) as serial_factory, \
+            patch('picpro.protocol.IConnection.time.sleep'), \
+            patch.object(mock_serial_device, 'write', wraps=mock_serial_device.write) as write:
+        with open_connection('/dev/fake') as connection:
+            assert isinstance(connection, CONNECTION_TYPES[protocol])
+            assert connection.programmer_protocol() == protocol
+            assert connection.echo(b'ok') == b'ok'
+        serial_factory.assert_called_once()
+        assert not mock_serial_device.is_open
+        if protocol == b'P18A':
+            assert all(call.args[0] != b'\x16' for call in write.call_args_list)
+
+
+def test_default_service_detects_protocol(mock_serial_device: MockedDevice, protocol: bytes) -> None:
+    with patch('serial.Serial', return_value=mock_serial_device), patch('picpro.protocol.IConnection.time.sleep'):
+        info = PicPro().programmer_info('/dev/fake')
+    assert info.firmware_version == 3
+    assert info.protocol == protocol.decode()
+
+
+def test_default_service_reads_config_with_detected_protocol(mock_serial_device: MockedDevice) -> None:
+    with patch('serial.Serial', return_value=mock_serial_device), patch('picpro.protocol.IConnection.time.sleep'):
+        config = PicPro().read_config(Target('/dev/fake', '12f675'))
+    assert config.calibrate == 0xffff
+
+
+def test_default_service_programs_with_detected_protocol(mock_serial_device: MockedDevice, tmp_path: Path) -> None:
+    image = IntelHex()
+    image.frombytes(b'\x12\x34')
+    image_file = tmp_path / 'firmware.hex'
+    image.write_hex_file(str(image_file))
+    with patch('serial.Serial', return_value=mock_serial_device), patch('picpro.protocol.IConnection.time.sleep'):
+        result = PicPro().program(Target('/dev/fake', '12f675'), image_file)
+    assert result.success
+    assert mock_serial_device.work_thread.rom_data is not None
+    assert mock_serial_device.work_thread.rom_data[:2] == b'\x34\x12'
+
+
+def test_auto_detection_rejects_bad_protocol_and_closes_port(mock_serial_device: MockedDevice, protocol: bytes) -> None:
+    cmd = 21 if protocol == b'P18A' else 22
+    mock_serial_device.work_thread.response_overrides[(cmd, protocol)] = b'P999'
+    with patch('serial.Serial', return_value=mock_serial_device), patch('picpro.protocol.IConnection.time.sleep'), \
+            pytest.raises(InvalidResponseError, match='Unsupported or invalid programmer protocol'):
+        open_connection('/dev/fake')
+    assert not mock_serial_device.is_open
+
+
+def test_auto_detection_rejects_truncated_protocol(mock_serial_device: MockedDevice, protocol: bytes) -> None:
+    if protocol != b'P18A':
+        pytest.skip('Truncated P18A response must not trigger the legacy command')
+    mock_serial_device.work_thread.response_overrides[(21, protocol)] = b'P01'
+    with patch('serial.Serial', return_value=mock_serial_device), patch('picpro.protocol.IConnection.time.sleep'), \
+            patch.object(mock_serial_device, 'write', wraps=mock_serial_device.write) as write, \
+            pytest.raises(InvalidResponseError, match='Unsupported or invalid programmer protocol'):
+        open_connection('/dev/fake')
+    assert not mock_serial_device.is_open
+    assert all(call.args[0] != b'\x16' for call in write.call_args_list)
+
+
+def test_auto_detection_rejects_mismatched_version_without_querying_legacy_protocol(mock_serial_device: MockedDevice,
+                                                                                    protocol: bytes) -> None:
+    if protocol == b'P18A':
+        pytest.skip('GET VERSION at command 21 applies only to legacy protocols')
+    mock_serial_device.work_thread.response_overrides[(21, b'\x03')] = b'\x02'
+    with patch('serial.Serial', return_value=mock_serial_device), patch('picpro.protocol.IConnection.time.sleep'), \
+            patch.object(mock_serial_device, 'write', wraps=mock_serial_device.write) as write, \
+            pytest.raises(InvalidResponseError, match='Invalid programmer version response'):
+        open_connection('/dev/fake')
+    assert not mock_serial_device.is_open
+    assert all(call.args[0] != b'\x16' for call in write.call_args_list)
+
+
+@pytest.mark.parametrize(('core_type', 'erase_mode'), [('bit16_c', 0), ('newf12b', 0), ('bit14_b', 8)])
+def test_service_rejects_undocumented_legacy_chip_before_initialization(
+    mock_connection: IConnection, mock_serial_device: MockedDevice, chip_info_entry: ChipInfoEntry, protocol: bytes,
+    core_type: str, erase_mode: int,
+) -> None:
+    if protocol == b'P18A':
+        pytest.skip('Legacy protocol restrictions do not apply to P18A')
+    chip = replace(chip_info_entry, core_type=core_type, erase_mode=erase_mode)
+    service = PicPro(connection_factory=lambda _port: mock_connection)
+    with pytest.raises(UnsupportedChipError, match='programming parameters not supported'), \
+            service._interface(Target('/dev/fake', chip.chip_name), chip, None):  # noqa: SLF001
+        pytest.fail('Unsupported chip must not be initialized')
+    assert mock_serial_device.work_thread.programing_vars is None
+
+
+def test_service_rejects_p018_10f_calibration_before_initialization(
+    mock_connection: IConnection, mock_serial_device: MockedDevice, chip_info_entry: ChipInfoEntry, protocol: bytes,
+) -> None:
+    if protocol != b'P018':
+        pytest.skip('P018 has an unimplemented 10F calibration command')
+    chip = replace(chip_info_entry, core_type='bit14_h')
+    service = PicPro(connection_factory=lambda _port: mock_connection)
+    with pytest.raises(UnsupportedChipError, match='programming parameters not supported'), \
+            service._interface(Target('/dev/fake', chip.chip_name), chip, None):  # noqa: SLF001
+        pytest.fail('Unsupported chip must not be initialized')
+    assert mock_serial_device.work_thread.programing_vars is None
 
 
 def test_get_programming_interface(mock_connection: IConnection, chip_info_entry: ChipInfoEntry) -> None:
