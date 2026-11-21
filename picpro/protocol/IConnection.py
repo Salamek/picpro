@@ -14,8 +14,14 @@ if TYPE_CHECKING:
 
 class IConnection:
     detected_programmer_version: int
+    serial_connection: serial.Serial
 
-    def __init__(self, port: str) -> None:
+    def __init__(self, port: str, *, existing_connection: 'IConnection | None' = None) -> None:
+        if existing_connection is not None:
+            self.serial_connection = existing_connection.serial_connection
+            self.detected_programmer_version = existing_connection.detected_programmer_version
+            return
+
         try:
             self.serial_connection = serial.Serial(
                 port=port,

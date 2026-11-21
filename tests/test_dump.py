@@ -13,12 +13,12 @@ def test_dump_byte_order(tmp_path: Path, yaml_chip_data_path: Path, monkeypatch:
     cli = importlib.import_module('picpro.bin.picpro')
     output = tmp_path / ('dump.bin' if binary else 'dump.hex')
     monkeypatch.setattr(cli, '_find_chip_data', lambda: yaml_chip_data_path)
-    factory = MagicMock(spec=cli.Connection)
+    factory = MagicMock(spec=cli.open_connection)
     programmer = factory.return_value.__enter__.return_value.get_programming_interface.return_value.__enter__.return_value
     payload = b'\x11\x22\x00\xff'
     programmer.read_eeprom.return_value = payload
     programmer.read_rom.return_value = payload
-    monkeypatch.setattr(cli, 'Connection', factory)
+    monkeypatch.setattr(cli, 'open_connection', factory)
 
     cli.dump(cli.MemoryType(memory), '/dev/fake', '12f675', output, binary=binary)
 

@@ -19,10 +19,19 @@ from yaml import YAMLError
 import picpro as app_root
 from picpro.ChipDataReader import ChipDataReader
 from picpro.ChipInfoEntry import ChipInfoEntry
-from picpro.exceptions import FormatError, FuseError, ICSPRequiredError, InvalidFirmwareError, InvalidPicIdError, InvalidResponseError, UnknownChipError
+from picpro.exceptions import (
+    FormatError,
+    FuseError,
+    ICSPRequiredError,
+    InvalidFirmwareError,
+    InvalidPicIdError,
+    InvalidResponseError,
+    UnknownChipError,
+    UnsupportedChipError,
+)
 from picpro.PicPro import ChipConfigEvent, MemoryType, NoEEPROMError, PicPro, PicProEvent, Stage, StageEvent, Target, VerificationEvent
+from picpro.protocol.auto import open_connection
 from picpro.protocol.ChipConfig import ChipConfig
-from picpro.protocol.p18a.Connection import Connection
 from picpro.tools import swab_bytes
 
 app = typer.Typer(
@@ -124,7 +133,7 @@ def _display_event(event: PicProEvent, operation: str, output_file: Path | None 
 def _service(operation: str, output_file: Path | None = None) -> PicPro:
     return PicPro(
         chip_data=ChipDataReader(_find_chip_data()) if operation != 'programmer_info' else None,
-        connection_factory=Connection,
+        connection_factory=open_connection,
         on_event=lambda event: _display_event(event, operation, output_file),
     )
 
@@ -155,6 +164,8 @@ def _report_errors(operation: str, *, port: str | None = None, firmware: Path | 
         _fail(operation, f'Invalid firmware "{firmware}": {error}')
     except ICSPRequiredError as error:
         _fail(operation, f'{error} Connect through ICSP and rerun with --icsp.')
+    except UnsupportedChipError as error:
+        _fail(operation, str(error))
     except InvalidPicIdError as error:
         _fail(operation, str(error))
     except FuseError as error:

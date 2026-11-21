@@ -18,12 +18,12 @@ from yaml import ScalarNode
 from picpro.ChipDataReader import ChipDataReader
 from picpro.ChipInfoEntry import ChipInfoEntry
 from picpro.ChipInfoReader import ChipInfoReader
-from picpro.exceptions import ICSPRequiredError
+from picpro.exceptions import ICSPRequiredError, UnsupportedChipError
 from picpro.FlashData import FlashData
+from picpro.protocol.auto import open_connection
 from picpro.protocol.ChipConfig import ChipConfig
 from picpro.protocol.IConnection import IConnection
 from picpro.protocol.IProgrammingInterface import IProgrammingInterface
-from picpro.protocol.p18a.Connection import Connection
 
 
 @dataclass(frozen=True)
@@ -124,6 +124,8 @@ PicProEvent = StageEvent | ChipConfigEvent | VerificationEvent
 EventHandler = Callable[[PicProEvent], None]
 CancellationCheck = Callable[[], bool]
 
+_LEGACY_LIMITS = {b'P014': (10, 5), b'P016': (10, 5), b'P018': (11, 7)}
+
 
 class PicPro:
     """One blocking operation per call; callers own worker threads and presentation.
@@ -136,7 +138,7 @@ class PicPro:
     def __init__(self, *, chip_data: ChipRepository | None = None, connection_factory: Callable[[str], IConnection] | None = None,
                  on_event: EventHandler | None = None) -> None:
         self._chip_data = chip_data
-        self._connection_factory = connection_factory if connection_factory is not None else Connection
+        self._connection_factory = connection_factory if connection_factory is not None else open_connection
         self._on_event = on_event
 
     @staticmethod
@@ -208,6 +210,13 @@ class PicPro:
         self._stage(Stage.CONNECTING, should_cancel)
         with self._connection_factory(target.port) as connection:
             self._stage(Stage.INITIALIZING, should_cancel)
+            protocol = connection.expected_programmer_protocol
+            if protocol in _LEGACY_LIMITS:
+                variables = chip.programming_variables
+                max_core, max_erase = _LEGACY_LIMITS[protocol]
+                if chip.core_type == 'newf12b' or not 1 <= variables.core_type <= max_core or not 0 <= variables.erase_mode <= max_erase:
+                    msg = f'{chip.chip_name} has programming parameters not supported by {protocol.decode()}.'
+                    raise UnsupportedChipError(msg)
             with connection.get_programming_interface(chip, icsp_mode=target.icsp) as interface:
                 yield interface
 

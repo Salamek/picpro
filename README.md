@@ -11,7 +11,8 @@ This is complete rewrite of kitsrus_pic_programmer into Python 3 + bunch of fixe
 * K150 (Tested)
 * K182
 
-**Note:** The programmer must have the latest firmware version, which utilizes the P18A protocol. Firmware versions using older protocols (P018, P016, P014, or earlier) are not supported.
+**Note:** It is recommended to have the latest firmware installed on your programmer, which uses the P18A protocol.
+The programmer protocol is detected automatically. Support for older firmware versions using the P018, P016, and P014 protocols is experimental.
 
 See <https://www.kitsrus.com/pic.html>.
 

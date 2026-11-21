@@ -211,6 +211,25 @@ def test_program_parses_repeated_fuses_id_and_preserves_calibration(cli: CLI) ->
     assert cli.serial_factory.call_args.kwargs['port'] == '/dev/fake'
 
 
+@pytest.mark.parametrize('protocol', [b'P014', b'P016', b'P018'])
+def test_program_with_legacy_protocol(cli: CLI, protocol: bytes) -> None:
+    cli.device.protocol = protocol
+    result = cli.run(*cli.hardware_args('program'))
+    assert result.code == 0
+    assert result.stderr == ''
+    assert 'ROM verified.' in result.stdout
+    assert cli.device.work_thread.rom_data == cli.expected.rom_data
+
+
+def test_legacy_unsupported_chip_reports_error_without_initializing(cli: CLI) -> None:
+    cli.device.protocol = b'P016'
+    result = cli.run('erase', '-p', '/dev/fake', '-t', '10f200', '--icsp')
+    assert result.code == 1
+    assert 'not supported by P016' in result.stderr
+    assert 'Traceback' not in result.stderr
+    assert cli.device.work_thread.programing_vars is None
+
+
 @pytest.mark.parametrize('fuse', ['UNKNOWN:Enabled', 'WDT:unknown'])
 def test_invalid_fuses_print_valid_choices_before_opening_port(cli: CLI, fuse: str) -> None:
     result = cli.run(*cli.hardware_args('program'), f'--fuse={fuse}')
