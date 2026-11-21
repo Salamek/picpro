@@ -349,3 +349,31 @@ def test_config_event_skips_device_id_check_when_definition_has_no_id(service_fi
     fixture.service.read_config(fixture.target)
     event = next(event for event in fixture.events if isinstance(event, ChipConfigEvent))
     assert not event.device_id_mismatch
+
+
+@pytest.mark.parametrize('chip_name', ['12f509', '12f675', '16f737', '18f2550'])
+def test_backup_round_trips_device_regions(service_fixture: ServiceFixture, yaml_chip_data_path: Path, tmp_path: Path, chip_name: str) -> None:
+    fixture = service_fixture
+    chip = ChipDataReader(yaml_chip_data_path).get_chip(chip_name)
+    fixture.repository.chip_entries[chip_name] = chip
+    rom = b'\x01\x23' + chip.rom_blank_word.to_bytes(2, 'big') * (chip.rom_size // 2 - 1)
+    eeprom = bytes(range(chip.eeprom_size))
+    user_id = bytes.fromhex('0809070612345678')
+    fuses = [word & ~index for index, word in enumerate(chip.fuse_blank, start=1)]
+    fixture.interface.read_config.return_value = ChipConfig(chip.chip_id, user_id, fuses + [0xffff] * (7 - len(fuses)), 0)
+    fixture.interface.read_rom.return_value = rom
+    fixture.interface.read_eeprom.return_value = eeprom
+
+    backup = fixture.service.read_backup(replace(fixture.target, chip_name=chip_name))
+    output = tmp_path / 'backup.hex'
+    backup.write_hex_file(str(output))
+    restored = fixture.service.inspect_hex(chip_name, output)
+
+    assert restored.rom_data == rom
+    assert restored.eeprom_data == eeprom
+    assert restored.id_data == (user_id if chip.core_bits == 16 else user_id[:4])
+    assert restored.fuse_data == fuses
+    fixture.factory.assert_called_once()
+    fixture.interface.__exit__.assert_called_once()
+    if not eeprom:
+        fixture.interface.read_eeprom.assert_not_called()

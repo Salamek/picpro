@@ -556,3 +556,21 @@ def test_icsp_only_chip_requires_flag_before_opening_port(cli: CLI) -> None:
     assert result.code == 0
     assert result.stderr == ''
     cli.serial_factory.assert_called_once()
+
+
+def test_dump_all_writes_an_addressed_backup(cli: CLI) -> None:
+    result = cli.run('dump', 'all', '-p', '/dev/fake', '-o', str(cli.output), '-t', '12f675')
+    assert result.code == 0
+    image = IntelHex(str(cli.output))
+    assert [image[address] for address in (0, 1)] == [0x83, 0x12]
+    assert [image[address] for address in (0x4000, 0x4001, 0x400e, 0x400f)] == [ord('1'), 0, 0xff, 0x31]
+    assert [image[address] for address in (0x4200, 0x4201, 0x4202, 0x4203)] == [0x11, 0, 0x22, 0]
+    cli.serial_factory.assert_called_once()
+
+
+def test_dump_all_rejects_binary_before_opening_port(cli: CLI) -> None:
+    result = cli.run('dump', 'all', '-p', '/dev/fake', '-o', str(cli.output), '-t', '12f675', '--binary')
+    assert result.code == 2
+    assert 'requires Intel HEX' in result.stderr
+    cli.serial_factory.assert_not_called()
+    assert not cli.output.exists()

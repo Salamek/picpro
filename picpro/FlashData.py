@@ -5,7 +5,8 @@ from collections.abc import Callable
 from intelhex import IntelHex
 
 from picpro.ChipInfoEntry import ChipInfoEntry
-from picpro.exceptions import InvalidFirmwareError, InvalidPicIdError
+from picpro.exceptions import InvalidFirmwareError, InvalidPicIdError, InvalidResponseError
+from picpro.protocol.ChipConfig import ChipConfig
 from picpro.tools import swab_bytes
 
 
@@ -19,6 +20,7 @@ class MemoryMapping:
     rom: MemoryRegion
     eeprom: MemoryRegion
     config: MemoryRegion
+    fuse_start: int
     id: MemoryRegion | None = None
 
 
@@ -52,35 +54,50 @@ class FlashData:
         self.calibration_word = None
         self.id_buffer = None
 
-        # Set memory map based on PIC architecture family
-        # ROM region is always dynamic based on actual chip ROM size
-        if self.chip_info.core_bits == 16:
-            # PIC18 EEPROM stores packed bytes at 0xf00000.
-            self._memory_mapping = MemoryMapping(
-                rom=MemoryRegion(0x0000, self.chip_info.rom_size),  # Was hardcoded to 0x8000
-                eeprom=MemoryRegion(0xf00000, 0xf00000 + self.chip_info.eeprom_size),
+        self._memory_mapping = self._map_for_chip(chip_info)
+        self.process()
+
+    @staticmethod
+    def _map_for_chip(chip: ChipInfoEntry) -> MemoryMapping:
+        rom = MemoryRegion(0, chip.rom_size)
+        if chip.core_bits == 16:
+            return MemoryMapping(
+                rom=rom,
+                eeprom=MemoryRegion(0xf00000, 0xf00000 + chip.eeprom_size),
                 config=MemoryRegion(0x300000, 0x30000e),
+                fuse_start=0x300000,
                 id=MemoryRegion(0x200000, 0x200010),
             )
-        elif self.chip_info.core_bits == 12:
-            # 12-bit Baseline family (10F, 12F508, etc.)
-            # Config/calibration typically beyond ROM, around 2*last_word_addr
-            # We scan a conservative range that covers all baseline PICs
-            self._memory_mapping = MemoryMapping(
-                rom=MemoryRegion(0x0000, self.chip_info.rom_size),
-                config=MemoryRegion(self.chip_info.rom_size, 0x2000),  # Scan after ROM up to 0x2000
-                eeprom=MemoryRegion(0x4200, 0x4200 + self.chip_info.eeprom_size * 2),
-            )
-        else:  # core_bits == 14
-            # 14-bit Midrange family (12F6xx, 16Fxxx)
-            # Standard locations: Config at 0x2007 (byte 0x400E), User ID at 0x2000-0x2003, EEPROM at 0x2100+
-            self._memory_mapping = MemoryMapping(
-                rom=MemoryRegion(0x0000, self.chip_info.rom_size),  # Was hardcoded to 0x4000
-                config=MemoryRegion(0x4000, max(0x4010, 0x400e + 2 * len(self.chip_info.fuse_blank))),  # Includes User ID (0x4000-0x4007) and Config (0x400E)
-                eeprom=MemoryRegion(0x4200, 0x4200 + self.chip_info.eeprom_size * 2),
-            )
+        eeprom = MemoryRegion(0x4200, 0x4200 + chip.eeprom_size * 2)
+        if chip.core_bits == 12:
+            # Baseline configuration word address 0x0fff in HEX byte addresses.
+            return MemoryMapping(rom=rom, config=MemoryRegion(chip.rom_size, 0x2000), eeprom=eeprom, fuse_start=0x1ffe)
+        # Midrange user ID starts at word 0x2000, configuration at word 0x2007.
+        return MemoryMapping(
+            rom=rom, config=MemoryRegion(0x4000, max(0x4010, 0x400e + 2 * len(chip.fuse_blank))),
+            eeprom=eeprom, fuse_start=0x400e,
+        )
 
-        self.process()
+    @classmethod
+    def backup_image(cls, chip: ChipInfoEntry, rom: bytes, eeprom: bytes, config: ChipConfig) -> IntelHex:
+        """Make a HEX image from the regions exposed by the programmer."""
+        fuse_count = 7 if chip.core_bits == 16 else len(chip.fuse_blank)
+        if len(rom) != chip.rom_size or len(eeprom) != chip.eeprom_size or len(config.id) != 8 or len(config.fuses) < fuse_count:
+            msg = 'Programmer returned incomplete or incorrectly sized backup data.'
+            raise InvalidResponseError(msg)
+
+        regions = cls._map_for_chip(chip)
+        image = IntelHex()
+        image.frombytes(swab_bytes(rom), offset=regions.rom.start)
+        if regions.id is not None:
+            image.frombytes(swab_bytes(config.id), offset=regions.id.start)
+        else:
+            image.frombytes(b''.join(value.to_bytes(2, 'little') for value in config.id[:4]), offset=regions.config.start)
+            eeprom = b''.join(value.to_bytes(2, 'little') for value in eeprom)
+        if eeprom:
+            image.frombytes(eeprom, offset=regions.eeprom.start)
+        image.frombytes(struct.pack(f'<{fuse_count}H', *config.fuses[:fuse_count]), offset=regions.fuse_start)
+        return image
 
     def _tobinarray_really(self, start: int, end: int, pad_callback: Callable[[int, int], int]) -> PaddedBuffer:
         """Return binary array."""
@@ -127,21 +144,13 @@ class FlashData:
             pad_callback=lambda _adr, _i: 0x000,
         )
 
-        if self.chip_info.core_bits == 16:
-            self.fuse_buffer = self._tobinarray_really(
-                start=0x300000,
-                end=0x30000e,
-                pad_callback=lambda _adr, i: self._fuse_data_blank[i],
-            )
-        else:
-            # The baseline configuration word is at logical word address 0x0fff.
-            # Intel HEX uses byte addresses, so that word starts at 0x1ffe.
-            fuse_start = 0x1ffe if self.chip_info.core_bits == 12 else 0x400e
-            self.fuse_buffer = self._tobinarray_really(
-                start=fuse_start,
-                end=fuse_start + len(self._fuse_data_blank),
-                pad_callback=lambda _adr, i: self._fuse_data_blank[i],
-            )
+        fuse_start = self._memory_mapping.fuse_start
+        fuse_size = 14 if self.chip_info.core_bits == 16 else len(self._fuse_data_blank)
+        self.fuse_buffer = self._tobinarray_really(
+            start=fuse_start,
+            end=fuse_start + fuse_size,
+            pad_callback=lambda _adr, i: self._fuse_data_blank[i],
+        )
 
         if self._memory_mapping.id:
             self.id_buffer = self._tobinarray_really(

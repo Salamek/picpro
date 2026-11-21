@@ -205,6 +205,18 @@ picpro dump rom -p /dev/ttyUSB0 -o rom.hex -t 12F675
 picpro dump eeprom -p /dev/ttyUSB0 -o eeprom.hex -t 12F675
 ```
 
+### Example: Back up all programmable regions
+
+```bash
+picpro dump all -p /dev/ttyUSB0 -o backup.hex -t 12F675
+```
+
+This reads ROM, EEPROM where present, user ID and configuration words in one
+session and places them at their firmware HEX addresses. The backup includes
+only data the programmer can read. It uses Intel HEX and cannot be combined
+with `--binary`. Read protection and device-specific write support still apply
+when reading or restoring a chip.
+
 ### Example: Dump CONFIG as hex file
 
 ```bash

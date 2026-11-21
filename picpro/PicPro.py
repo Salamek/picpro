@@ -312,6 +312,21 @@ class PicPro:
         self._stage(Stage.COMPLETED, should_cancel)
         return data
 
+    def read_backup(self, target: Target, *, should_cancel: CancellationCheck | None = None) -> IntelHex:
+        """Read programmable regions in one session and return an Intel HEX image."""
+        chip = self.get_chip(target.chip_name)
+        with self._interface(target, chip, should_cancel) as interface:
+            config = self._config(interface, chip, should_cancel)
+            self._stage(Stage.READING_ROM, should_cancel)
+            rom = interface.read_rom()
+            eeprom = b''
+            if chip.has_eeprom:
+                self._stage(Stage.READING_EEPROM, should_cancel)
+                eeprom = interface.read_eeprom()
+        image = FlashData.backup_image(chip, rom, eeprom, config)
+        self._stage(Stage.COMPLETED, should_cancel)
+        return image
+
     def programmer_info(self, port: str, *, should_cancel: CancellationCheck | None = None) -> ProgrammerInfo:
         self._stage(Stage.CONNECTING, should_cancel)
         with self._connection_factory(port) as connection:

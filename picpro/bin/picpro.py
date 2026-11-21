@@ -6,6 +6,7 @@ import signal
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
+from enum import StrEnum
 from importlib.resources.abc import Traversable
 from pathlib import Path
 from typing import Annotated, NoReturn
@@ -61,22 +62,28 @@ def _print_chip_config(chip_config: ChipConfig, chip_info_entry: ChipInfoEntry) 
 
 
 
+def _display_config_event(event: ChipConfigEvent, operation: str) -> None:
+    if event.device_id_mismatch:
+        typer.echo(
+            f'Warning: Device ID mismatch for {event.chip.chip_name}. '
+            f'Expected {event.chip.chip_id:#06x}, read {event.config.chip_id:#06x}.',
+            err=True,
+        )
+    if operation == 'dump':
+        return
+    if operation == 'verify':
+        typer.echo(f'Chip config: {event.config}')
+    else:
+        if operation == 'program':
+            typer.echo('==== Chip info ====')
+        _print_chip_config(event.config, event.chip)
+
+
 def _display_event(event: PicProEvent, operation: str, output_file: Path | None = None) -> None:
     if operation == 'programmer_info':
         return
     if isinstance(event, ChipConfigEvent):
-        if event.device_id_mismatch:
-            typer.echo(
-                f'Warning: Device ID mismatch for {event.chip.chip_name}. '
-                f'Expected {event.chip.chip_id:#06x}, read {event.config.chip_id:#06x}.',
-                err=True,
-            )
-        if operation == 'verify':
-            typer.echo(f'Chip config: {event.config}')
-        else:
-            if operation == 'program':
-                typer.echo('==== Chip info ====')
-            _print_chip_config(event.config, event.chip)
+        _display_config_event(event, operation)
     elif isinstance(event, VerificationEvent):
         label = event.memory.value.upper()
         if event.matches:
@@ -193,22 +200,38 @@ def verify(port: Port, pic_type: ChipType, hex_file: InputFile, *, icsp: ICSP = 
             raise typer.Exit(1)
 
 
+class DumpRegion(StrEnum):
+    ROM = 'rom'
+    EEPROM = 'eeprom'
+    CONFIG = 'config'
+    ALL = 'all'
+
+
 @app.command()
-def dump(mem_type: Annotated[MemoryType, typer.Argument(help='Memory to read: rom, eeprom, or config.')],
+def dump(mem_type: Annotated[DumpRegion, typer.Argument(help='Memory to read: rom, eeprom, config, or all.')],
          port: Port, pic_type: ChipType, output_file: OutputFile, *, icsp: ICSP = False,
          binary: Annotated[bool, typer.Option('--binary', help='Write raw binary instead of Intel HEX.')] = False) -> None:
     """Dump PIC memory to a file."""
+    if mem_type == DumpRegion.ALL and binary:
+        msg = 'A whole-chip backup requires Intel HEX.'
+        raise typer.BadParameter(msg, param_hint='--binary')
     with _report_errors('dump', port=port):
-        content = _service('dump', output_file).read_memory(Target(port, pic_type, icsp), mem_type)
-        if mem_type == MemoryType.ROM:
-            content = swab_bytes(content)
-        if binary:
-            output_file.write_bytes(content)
+        service = _service('dump', output_file)
+        target = Target(port, pic_type, icsp)
+        if mem_type == DumpRegion.ALL:
+            image = service.read_backup(target)
         else:
+            content = service.read_memory(target, MemoryType(mem_type))
+            if mem_type == DumpRegion.ROM:
+                content = swab_bytes(content)
+            if binary:
+                output_file.write_bytes(content)
+                typer.echo('Done!')
+                return
             image = IntelHex()
             image.frombytes(content)
-            with output_file.open('w', encoding='ascii') as file:
-                image.write_hex_file(file)
+        with output_file.open('w', encoding='ascii') as file:
+            image.write_hex_file(file)
         typer.echo('Done!')
 
 
