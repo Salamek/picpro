@@ -58,6 +58,14 @@ and then install by running
 pacman -Sy picpro
 ```
 
+### Running with pkgx (alternative)
+
+You can also run picpro with [pkgx](https://github.com/pkgxdev/pkgx) without installing it:
+
+```bash
+pkgx picpro
+```
+
 ## Desktop GUI
 
 The desktop interface is distributed separately as `picpro-gui`.
