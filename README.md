@@ -68,7 +68,7 @@ pkgx picpro
 
 ## Desktop GUI
 
-The desktop interface is distributed separately as `picpro-gui`.
+The desktop interface is distributed separately as `picpro-gui` [picpro-gui](https://github.com/Salamek/picpro-gui).
 It uses the PicPro application API described below.
 
 ## Application API
